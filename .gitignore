@@ -1,0 +1,15 @@
+node_modules/
+
+# downloaded code-server runtime and bundled IDE extensions
+/runtime
+
+# persistent host data: config, logs, IDE data, devices, certificates
+/data
+
+# native and packaging outputs
+/build
+/dist
+
+*.log
+.DS_Store
+Thumbs.db

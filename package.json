@@ -1,0 +1,45 @@
+{
+  "private": true,
+  "name": "@vistta/codehub",
+  "version": "0.1.0",
+  "description": "VISTTA Code Hub — self-hosted code-server IDE with a desktop host app and paired mobile/desktop clients",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "install-runtime": "node scripts/install-runtime.js",
+    "start": "vistta ./server.js",
+    "server": "vistta ./server.js --dev --watch",
+    "pair": "node scripts/pair.js",
+    "cert": "vistta ./scripts/make-cert.js",
+    "import": "node scripts/import.js",
+    "test": "vistta test \"tests/*.test.js\" --environment=node",
+    "host": "vistta run ./host --setup=./host/setup.js --out=build/host --dev",
+    "client": "vistta run ./client --setup=./client/setup.js --out=build/client --dev",
+    "client:android": "vistta run ./client android --setup=./client/setup.js --out=build/client-android --dev",
+    "stage:host": "node scripts/stage-host.js",
+    "build:host:windows": "npm run stage:host && vistta build ./host windows --setup=./host/setup.js --build=build/host --out=dist --name=vistta-code-hub --target=nsis",
+    "build:host:linux": "npm run stage:host && vistta build ./host linux --setup=./host/setup.js --build=build/host --out=dist --name=vistta-code-hub --target=deb,appimage",
+    "build:client:windows": "vistta build ./client windows --setup=./client/setup.js --build=build/client --out=dist --name=vistta-code-hub-client --target=nsis",
+    "build:client:linux": "vistta build ./client linux --setup=./client/setup.js --build=build/client --out=dist --name=vistta-code-hub-client --target=deb,appimage",
+    "build:client:android": "vistta build ./client android --setup=./client/setup.js --build=build/client-android --out=dist --name=vistta-code-hub-client --target=apk"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://git.vistta.me/vistta/codehub.git"
+  },
+  "author": "Tiago Terrenas Almeida",
+  "license": "MIT",
+  "dependencies": {
+    "@peculiar/x509": "^1.12.3",
+    "@vistta/cli": "../packages/cli",
+    "@vistta/fs": "../packages/fs",
+    "@vistta/js": "../packages/js",
+    "@vistta/js-native": "../packages/js-native",
+    "@vistta/ui": "../packages/ui",
+    "qrcode": "^1.5.4",
+    "reflect-metadata": "^0.2.2"
+  }
+}

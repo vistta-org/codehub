@@ -1,0 +1,5 @@
+{
+  "extends": "@vistta/js/config",
+  "include": ["./**/*.js", "./**/*.jsx", "./**/*.d.ts"],
+  "exclude": ["./build/**", "./dist/**", "./data/**", "./runtime/**", "./node_modules/**"]
+}
