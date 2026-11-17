@@ -6,8 +6,6 @@ Android app is a client only (it cannot run code-server's Node 24 runtime).
 The hub backend manages the IDE, projects, extensions, pairing, LAN sharing and
 the paired remote hosts; the IDE extension provides host management inside the IDE.
 
-See [PLAN.md](PLAN.md) for the migration plan and current status.
-
 ## Architecture
 
 ```
@@ -262,7 +260,7 @@ them live while the release stays a draft.
 ## Tests
 
 ```powershell
-npm test   # 80 tests: Android client, config, devices, IDE extension, hub lifecycle, projects, router, tls, workbench
+npm test: Android client, config, devices, IDE extension, hub lifecycle, projects, router, tls, workbench
 ```
 
 The suite boots real hubs on free ports, exchanges real pairing codes over HTTP,

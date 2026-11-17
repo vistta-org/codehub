@@ -17,11 +17,12 @@ const withRoot = (value) => {
 
 suite("projects", () => {
   test("isInside blocks traversal and equal paths work", () => {
-    assert.ok(isInside("C:\\a\\b", "C:\\a\\b\\c"));
-    assert.ok(isInside("C:\\a\\b", "C:\\a\\b"));
-    assert.ok(!isInside("C:\\a\\b", "C:\\a\\bb\\c"));
-    assert.ok(!isInside("C:\\a\\b", "C:\\a\\c"));
-    assert.ok(!isInside("C:\\a\\b", "D:\\x"));
+    const parent = path.resolve("a", "b");
+    assert.ok(isInside(parent, path.join(parent, "c")));
+    assert.ok(isInside(parent, parent));
+    assert.ok(!isInside(parent, path.join(parent + "b", "c")));
+    assert.ok(!isInside(parent, path.resolve("a", "c")));
+    assert.ok(!isInside(parent, path.join(parent, "..", "..", "x")));
   });
 
   test("create: valid name, duplicate rejected, git optional", async () => {
