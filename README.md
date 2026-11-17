@@ -218,6 +218,47 @@ sets its IDE session cookie directly. Native pairing handshake `POST /_vch/pair`
 public CA, `POST /_vch/host/:action` (loopback + proof header) for host actions
 (`openRemote` only accepts the running relay URL of a paired computer).
 
+## Docker host
+
+`docker/Dockerfile` packages the hub as a headless host for remote use (no
+desktop app or IDE runtime is needed on the client; the hub serves code-server
+itself). Build it from the staged payload:
+
+```powershell
+npm run stage -- --target=build/docker   # add --no-runtime to skip the code-server runtime
+docker build -f docker/Dockerfile -t vistta/codehub build/docker
+```
+
+Run it with `docker/docker-compose.yml` (image, port `VCH_PORT` default 8181,
+`VCH_NAME`, and the `/data` and `/projects` volumes) or with plain `docker run`:
+
+```powershell
+docker run -d -p 8181:8181 -e VCH_SHARE=true -v codehub-data:/data -v codehub-projects:/projects vistta/codehub
+```
+
+Remote access needs `VCH_SHARE=true` (the LAN HTTPS listener). Plain HTTP is only
+accepted from loopback, so published ports always use HTTPS. Pair a device with
+`docker compose exec codehub node scripts/pair.js`, or open `/pair` in a browser.
+The certificate covers the container hostname and interface IPs; for a public
+hostname set `VCH_TLS_CERT` and `VCH_TLS_KEY` together.
+
+## Release pipeline
+
+`.gitea/workflows/release.yml` is started manually (`workflow_dispatch`) with a
+**type**: `Manual` (default; uses the version in `package.json` as-is) or
+`Patch`/`Minor`/`Major`/`Beta`/`Alpha` to bump the version first. A bump commits
+`Release vX.Y.Z` to `main`. The pipeline:
+
+1. **Validation**: installs dependencies and runs `npm test`.
+2. **Release**: bumps the version if requested and creates a draft release `vX.Y.Z`.
+3. **Windows**, **Linux**, **Android**, **Docker**: build in parallel and upload
+   their artifacts to the draft. The Docker job pushes `vX.Y.Z` and `latest` to
+   `git.vistta.org/vistta/codehub` and attaches a `docker save` archive.
+4. **Publish**: marks the release public only after every build job succeeds.
+
+The Docker tags are pushed before publishing, so a failed later job can leave
+them live while the release stays a draft.
+
 ## Tests
 
 ```powershell
