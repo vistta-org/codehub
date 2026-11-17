@@ -67,7 +67,8 @@ export class ProjectStore {
     fs.mkdirSync(absolute, { recursive: true });
     let isGitRepo = false;
     if (options.gitInit) {
-      isGitRepo = spawnSync("git", ["init", "-b", "main"], { cwd: absolute, windowsHide: true, stdio: "ignore" }).status === 0;
+      isGitRepo =
+        spawnSync("git", ["init", "-b", "main"], { cwd: absolute, windowsHide: true, stdio: "ignore" }).status === 0;
     }
     return { name, path: absolute, isGitRepo };
   }

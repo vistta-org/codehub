@@ -1,0 +1,272 @@
+name: Release Workflow
+on:
+  workflow_dispatch:
+
+# Every build job uploads its artifacts to a draft release. The release is
+# published only after all of them succeed, so a failed build never leaves a
+# public, partially populated release behind.
+jobs:
+  Validation:
+    runs-on: ubuntu-latest
+    container:
+      image: node:22
+    steps:
+      - name: Checkout
+        uses: tiagomta/checkout@v1
+        with:
+          repository: vistta/workspace
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Link Workspace Packages
+        working-directory: ./codehub
+        run: npm link ../packages/cli ../packages/console ../packages/css ../packages/datetime ../packages/fs ../packages/js ../packages/js-native ../packages/ui ../packages/utils
+
+      - name: Unit Tests
+        working-directory: ./codehub
+        run: npm test
+
+  Release:
+    needs: Validation
+    runs-on: ubuntu-latest
+    container:
+      image: node:22
+    outputs:
+      id: ${{ steps.draft.outputs.id }}
+      tag: ${{ steps.draft.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: tiagomta/checkout@v1
+        with:
+          repository: vistta/workspace
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Create Draft Release
+        id: draft
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+          API: ${{ github.api_url }}/repos/${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          VERSION=$(node -p "require('./codehub/package.json').version")
+          TAG="v$VERSION"
+          if curl -fsS -o /dev/null -H "Authorization: token $TOKEN" "$API/releases/tags/$TAG"; then
+            echo "Release $TAG already exists; bump codehub/package.json first." >&2
+            exit 1
+          fi
+          PREVIOUS=$(git -C codehub describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+          git -C codehub log --format='- %s' ${PREVIOUS:+$PREVIOUS..HEAD} > notes.md
+          node -e 'const body = require("fs").readFileSync("notes.md", "utf8").trim() || "No changes recorded."; process.stdout.write(JSON.stringify({ tag_name: process.env.TAG, target_commitish: process.env.SHA, name: "Vistta Code Hub " + process.env.TAG, body, draft: true, prerelease: false }))' > release.json
+          ID=$(curl -fsS -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" --data-binary @release.json "$API/releases" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  Windows:
+    needs: Release
+    runs-on: windows
+    defaults:
+      run:
+        shell: bash
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+      API: ${{ github.api_url }}/repos/${{ github.repository }}
+      RELEASE_ID: ${{ needs.Release.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: tiagomta/checkout@v1
+        with:
+          repository: vistta/workspace
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Link Workspace Packages
+        working-directory: ./codehub
+        run: npm link ../packages/cli ../packages/console ../packages/css ../packages/datetime ../packages/fs ../packages/js ../packages/js-native ../packages/ui ../packages/utils
+
+      - name: Install Runtime
+        working-directory: ./codehub
+        run: npm run install-runtime
+
+      - name: Build Windows Installer
+        working-directory: ./codehub
+        run: npm run build:windows
+
+      - name: Upload Artifacts
+        working-directory: ./codehub
+        run: |
+          for file in dist/*; do
+            [ -f "$file" ] || continue
+            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+          done
+
+  Linux:
+    needs: Release
+    runs-on: ubuntu-latest
+    container:
+      image: vistta/runner
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+      API: ${{ github.api_url }}/repos/${{ github.repository }}
+      RELEASE_ID: ${{ needs.Release.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: tiagomta/checkout@v1
+        with:
+          repository: vistta/workspace
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Link Workspace Packages
+        working-directory: ./codehub
+        run: npm link ../packages/cli ../packages/console ../packages/css ../packages/datetime ../packages/fs ../packages/js ../packages/js-native ../packages/ui ../packages/utils
+
+      - name: Install Runtime
+        working-directory: ./codehub
+        run: npm run install-runtime
+
+      - name: Build Linux Packages
+        working-directory: ./codehub
+        run: npm run build:linux
+
+      - name: Upload Artifacts
+        working-directory: ./codehub
+        run: |
+          for file in dist/*; do
+            [ -f "$file" ] || continue
+            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+          done
+
+  Android:
+    needs: Release
+    runs-on: ubuntu-latest
+    container:
+      image: vistta/runner
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+      API: ${{ github.api_url }}/repos/${{ github.repository }}
+      RELEASE_ID: ${{ needs.Release.outputs.id }}
+      ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: tiagomta/checkout@v1
+        with:
+          repository: vistta/workspace
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Link Workspace Packages
+        working-directory: ./codehub
+        run: npm link ../packages/cli ../packages/console ../packages/css ../packages/datetime ../packages/fs ../packages/js ../packages/js-native ../packages/ui ../packages/utils
+
+      - name: Build Android Client
+        working-directory: ./codehub
+        run: npm run build:android
+
+      - name: Upload Artifacts
+        working-directory: ./codehub
+        run: |
+          for file in dist/*; do
+            [ -f "$file" ] || continue
+            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+          done
+
+  Docker:
+    needs: Release
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+      API: ${{ github.api_url }}/repos/${{ github.repository }}
+      RELEASE_ID: ${{ needs.Release.outputs.id }}
+      REGISTRY: git.vistta.org
+    steps:
+      - name: Checkout
+        uses: tiagomta/checkout@v1
+        with:
+          repository: vistta/workspace
+          ref: main
+          token: ${{ secrets.TOKEN }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Link Workspace Packages
+        working-directory: ./codehub
+        run: npm link ../packages/cli ../packages/console ../packages/css ../packages/datetime ../packages/fs ../packages/js ../packages/js-native ../packages/ui ../packages/utils
+
+      - name: Install Runtime
+        working-directory: ./codehub
+        run: npm run install-runtime
+
+      - name: Stage Docker Payload
+        working-directory: ./codehub
+        run: npm run stage -- --target=build/docker
+
+      - name: Build Image
+        working-directory: ./codehub
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          docker build -f docker/Dockerfile -t "$REGISTRY/vistta/codehub:$VERSION" -t "$REGISTRY/vistta/codehub:latest" build/docker
+
+      - name: Publish Image
+        working-directory: ./codehub
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "$TOKEN" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
+          docker push "$REGISTRY/vistta/codehub:$VERSION"
+          docker push "$REGISTRY/vistta/codehub:latest"
+
+      - name: Export Image Archive
+        working-directory: ./codehub
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          docker save "$REGISTRY/vistta/codehub:$VERSION" | gzip > "dist/vistta-codehub-$VERSION-docker-amd64.tar.gz"
+
+      - name: Upload Artifacts
+        working-directory: ./codehub
+        run: |
+          for file in dist/*; do
+            [ -f "$file" ] || continue
+            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+          done
+
+  Publish:
+    needs: [Release, Windows, Linux, Android, Docker]
+    runs-on: ubuntu-latest
+    container:
+      image: node:22
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+      API: ${{ github.api_url }}/repos/${{ github.repository }}
+      RELEASE_ID: ${{ needs.Release.outputs.id }}
+    steps:
+      - name: Publish Release
+        run: |
+          curl -fsS -X PATCH -H "Authorization: token $TOKEN" -H "Content-Type: application/json" -d '{"draft":false}' "$API/releases/$RELEASE_ID" > /dev/null
+          echo "Published ${{ needs.Release.outputs.tag }}"

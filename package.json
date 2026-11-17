@@ -2,7 +2,7 @@
   "private": true,
   "name": "@vistta/codehub",
   "version": "0.1.0",
-  "description": "VISTTA Code Hub — self-hosted code-server IDE with a desktop host app and paired mobile/desktop clients",
+  "description": "Vistta Code Hub — self-hosted code-server IDE with a desktop host app and paired mobile/desktop clients",
   "type": "module",
   "main": "server.js",
   "engines": {
@@ -12,19 +12,16 @@
     "install-runtime": "node scripts/install-runtime.js",
     "start": "vistta ./server.js",
     "server": "vistta ./server.js --dev --watch",
-    "pair": "node scripts/pair.js",
+    "pair": "vistta ./scripts/pair.js",
     "cert": "vistta ./scripts/make-cert.js",
     "import": "node scripts/import.js",
     "test": "vistta test \"tests/*.test.js\" --environment=node",
-    "host": "vistta run ./host --setup=./host/setup.js --out=build/host --dev",
-    "client": "vistta run ./client --setup=./client/setup.js --out=build/client --dev",
+    "dev": "node scripts/dev.js",
     "client:android": "vistta run ./client android --setup=./client/setup.js --out=build/client-android --dev",
-    "stage:host": "node scripts/stage-host.js",
-    "build:host:windows": "npm run stage:host && vistta build ./host windows --setup=./host/setup.js --build=build/host --out=dist --name=vistta-code-hub --target=nsis",
-    "build:host:linux": "npm run stage:host && vistta build ./host linux --setup=./host/setup.js --build=build/host --out=dist --name=vistta-code-hub --target=deb,appimage",
-    "build:client:windows": "vistta build ./client windows --setup=./client/setup.js --build=build/client --out=dist --name=vistta-code-hub-client --target=nsis",
-    "build:client:linux": "vistta build ./client linux --setup=./client/setup.js --build=build/client --out=dist --name=vistta-code-hub-client --target=deb,appimage",
-    "build:client:android": "vistta build ./client android --setup=./client/setup.js --build=build/client-android --out=dist --name=vistta-code-hub-client --target=apk"
+    "stage": "node scripts/stage.js",
+    "build:windows": "npm run stage && vistta build ./app windows --setup=./app/setup.js --build=build/app --out=dist --name=vistta-code-hub --target=nsis",
+    "build:linux": "npm run stage && vistta build ./app linux --setup=./app/setup.js --build=build/app --out=dist --name=vistta-code-hub --target=deb,appimage",
+    "build:android": "vistta build ./client android --setup=./client/setup.js --build=build/client-android --out=dist --name=vistta-code-hub-client --target=apk"
   },
   "repository": {
     "type": "git",
@@ -34,11 +31,12 @@
   "license": "MIT",
   "dependencies": {
     "@peculiar/x509": "^1.12.3",
-    "@vistta/cli": "../packages/cli",
-    "@vistta/fs": "../packages/fs",
-    "@vistta/js": "../packages/js",
-    "@vistta/js-native": "../packages/js-native",
-    "@vistta/ui": "../packages/ui",
+    "@vistta/cli": "^1.2.3",
+    "@vistta/fs": "^1.1.0",
+    "@vistta/js": "^0.0.1",
+    "@vistta/js-native": "^0.0.1",
+    "@vistta/ui": "^0.0.1",
+    "@vistta/utils": "^1.1.0",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2"
   }

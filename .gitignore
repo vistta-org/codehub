@@ -6,6 +6,9 @@ node_modules/
 # persistent host data: config, logs, IDE data, devices, certificates
 /data
 
+# hub test data folders
+/tests/.tmp-*/
+
 # native and packaging outputs
 /build
 /dist

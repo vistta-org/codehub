@@ -1,5 +1,6 @@
 /** IDE extension management through the code-server CLI (same extensions dir as the running IDE). */
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { AppError } from "./errors.js";
@@ -39,6 +40,31 @@ export class ExtensionManager {
           location: path.join(dir, entry.name),
         };
       });
+  }
+
+  /** Makes the host's web extension available without depending on workbench patch anchors. */
+  installBuiltIn(manifest, script) {
+    const root = this.deps.extensionsDir;
+    const id = `${manifest.publisher}.${manifest.name}`.toLowerCase();
+    const relativeLocation = `${id}-${manifest.version}`;
+    const location = path.join(root, relativeLocation);
+    fs.mkdirSync(location, { recursive: true });
+    fs.writeFileSync(path.join(location, "package.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(location, "extension.js"), script);
+    const index = path.join(root, "extensions.json");
+    const entries = fs.existsSync(index) ? JSON.parse(fs.readFileSync(index, "utf8")) : [];
+    if (!Array.isArray(entries)) throw new Error(`Invalid extension index: ${index}`);
+    const current = entries.filter((entry) => entry.identifier?.id?.toLowerCase() !== id);
+    current.push({
+      identifier: { id },
+      version: manifest.version,
+      location: { fsPath: location, path: location.replaceAll("\\", "/"), scheme: "file" },
+      relativeLocation,
+      metadata: { installedTimestamp: Date.now(), pinned: true, source: "resource" },
+    });
+    const temporary = `${index}.${randomUUID()}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify(current));
+    fs.renameSync(temporary, index);
   }
 
   #cli(args, timeout) {

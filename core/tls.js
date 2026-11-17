@@ -2,7 +2,6 @@
  * Local certificate authority for the LAN HTTPS listener. Devices trust the
  * public CA once; server certificates are renewed under it without new trust.
  */
-import "reflect-metadata";
 import {
   BasicConstraintsExtension,
   ExtendedKeyUsageExtension,
@@ -16,6 +15,7 @@ import { createPrivateKey, randomBytes, webcrypto, X509Certificate } from "node:
 import fs from "node:fs";
 import { isIP } from "node:net";
 import path from "node:path";
+import "reflect-metadata";
 import { certificateHosts } from "./net.js";
 
 const CA_SUBJECT = "CN=VISTTA Code Hub Local CA";

@@ -1,0 +1,17 @@
+# Run the published image: docker compose -f docker/docker-compose.yml up -d
+# Pair a device: docker compose -f docker/docker-compose.yml exec codehub node scripts/pair.js
+services:
+  codehub:
+    image: ${VCH_IMAGE:-git.vistta.org/vistta/codehub:latest}
+    restart: unless-stopped
+    ports:
+      - "${VCH_PORT:-8181}:8181"
+    environment:
+      VCH_NAME: ${VCH_NAME:-Vistta Code Hub}
+    volumes:
+      - codehub-data:/data
+      - codehub-projects:/projects
+
+volumes:
+  codehub-data:
+  codehub-projects:

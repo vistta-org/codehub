@@ -103,7 +103,7 @@ export class CodeServerLauncher {
         "--disable-getting-started-override",
         "--disable-update-check",
         "--app-name",
-        "VISTTA Code Hub",
+        "Vistta Code Hub",
       ];
       if (!config.ide.workspaceTrust) args.push("--disable-workspace-trust");
       args.push(...config.ide.extraArgs);

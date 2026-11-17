@@ -20,6 +20,13 @@ const PLATFORMS = ["android", "windows", "linux", "browser", "other"];
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 
+/** Copies a device record without its token hash (never leaves the host). */
+function withoutTokenHash(device) {
+  const { ...visible } = device;
+  delete visible.tokenHash;
+  return visible;
+}
+
 /** Constant-time string comparison. */
 export function safeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string") return false;
@@ -28,7 +35,7 @@ export function safeEqual(a, b) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-function writePrivate(file, contents) {
+export function writePrivate(file, contents) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.tmp`;
   fs.writeFileSync(temporary, contents, { mode: 0o600 });
@@ -99,7 +106,7 @@ export class DeviceStore {
   }
 
   list() {
-    return this.#devices.map(({ tokenHash: _hash, ...device }) => device);
+    return this.#devices.map(withoutTokenHash);
   }
 
   get pairing() {
@@ -141,15 +148,17 @@ export class DeviceStore {
       throw new AppError("Wrong pairing code", 403, "invalid_code");
     }
     this.#pairing = undefined;
-    const name = String(info.name ?? "").trim().slice(0, 80) || "Device";
+    const name =
+      String(info.name ?? "")
+        .trim()
+        .slice(0, 80) || "Device";
     const platform = PLATFORMS.includes(info.platform ?? "") ? info.platform : "other";
     const token = randomBytes(32).toString("base64url");
     /** @type {Device} */
     const device = { id: randomUUID(), name, platform, tokenHash: hash(token), createdAt: new Date().toISOString() };
     this.#devices.push(device);
     this.#save();
-    const { tokenHash: _hash, ...visible } = device;
-    return { token, device: visible };
+    return { token, device: withoutTokenHash(device) };
   }
 
   /**
@@ -162,8 +171,7 @@ export class DeviceStore {
     const device = this.#devices.find((entry) => safeEqual(entry.tokenHash, tokenHash));
     if (!device) return null;
     this.#seen(device);
-    const { tokenHash: _hash, ...visible } = device;
-    return visible;
+    return withoutTokenHash(device);
   }
 
   #seen(device) {
@@ -228,8 +236,7 @@ export class DeviceStore {
     const device = this.#devices.find((entry) => entry.id === deviceId);
     if (!device) return null;
     this.#seen(device);
-    const { tokenHash: _hash, ...visible } = device;
-    return visible;
+    return withoutTokenHash(device);
   }
 }
 

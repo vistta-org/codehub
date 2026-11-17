@@ -5,8 +5,8 @@
  */
 import fs from "node:fs";
 import http from "node:http";
-import { EXTENSION_PATH } from "./workbench.js";
 import { extensionManifest, extensionScript } from "./extension.js";
+import { EXTENSION_PATH } from "./workbench.js";
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -21,7 +21,9 @@ const HOP_BY_HOP = new Set([
   "http2-settings",
 ]);
 const WORKBENCH = /^\/[^/]+\/static\/out\/vs\/code\/browser\/workbench\/workbench\.js$/;
-const CODE_ICON = /^\/[^/]+\/static\/out\/media\/code-icon\.svg$/;
+const CODE_ICON = /^\/[^/]+\/static\/out\/(?:.+\/)?code-icon\.svg$/;
+export const TITLEBAR_PATH = "/_vch/titlebar.js";
+const titlebarScript = fs.readFileSync(new URL("./titlebar.js", import.meta.url), "utf8");
 const MEDIA = "/_static/src/browser/media";
 const ICON_FILES = new Set(
   [
@@ -34,6 +36,32 @@ const ICON_FILES = new Set(
     "pwa-icon-maskable-512.png",
   ].map((name) => `${MEDIA}/${name}`),
 );
+
+/**
+ * Branding assets browsers fetch without credentials (PWA manifest, icons).
+ * @param {string} pathname
+ */
+export function isPublicAsset(pathname) {
+  return (
+    pathname === "/manifest.json" ||
+    pathname === "/vscode/manifest.json" ||
+    ICON_FILES.has(pathname) ||
+    CODE_ICON.test(pathname)
+  );
+}
+
+/**
+ * Adds the desktop title-bar script to the workbench page (other HTML is left
+ * alone). The script does nothing outside the desktop app's IDE windows.
+ * @param {Buffer} html
+ */
+export function injectTitlebar(html) {
+  const text = html.toString("utf8");
+  if (!text.includes("vscode-workbench-web-configuration") || text.includes(TITLEBAR_PATH)) return html;
+  const index = text.indexOf("</head>");
+  if (index < 0) return html;
+  return Buffer.from(`${text.slice(0, index)}<script src="${TITLEBAR_PATH}" defer></script>\n${text.slice(index)}`);
+}
 
 /**
  * @param {Record<string, any>} source
@@ -54,7 +82,7 @@ export function forwardHeaders(source, { host, protocol, keepUpgrade = false }) 
 }
 
 /** @param {import("node:http").IncomingHttpHeaders} source */
-function responseHeaders(source) {
+export function responseHeaders(source) {
   return Object.fromEntries(Object.entries(source).filter(([key]) => !HOP_BY_HOP.has(key)));
 }
 
@@ -99,6 +127,7 @@ export class IdeProxy {
     if (pathname === `${EXTENSION_PATH}/package.json`)
       return send(200, "application/json", JSON.stringify(extensionManifest));
     if (pathname === `${EXTENSION_PATH}/extension.js`) return send(200, "text/javascript; charset=utf-8", extensionScript);
+    if (pathname === TITLEBAR_PATH) return send(200, "text/javascript; charset=utf-8", titlebarScript);
     return false;
   }
 
@@ -123,7 +152,7 @@ export class IdeProxy {
         );
     return {
       id: "/",
-      name: "VISTTA Code Hub",
+      name: "Vistta Code Hub",
       short_name: "Code Hub",
       description: "Your projects and IDE, anywhere on your network.",
       start_url: ".",
@@ -142,15 +171,34 @@ export class IdeProxy {
   web(request, response) {
     if (this.#serveOwn(request, response)) return;
     const host = request.headers.host ?? request.headers[":authority"] ?? "localhost";
+    // Pages are rewritten (title-bar script), so ask for them uncompressed.
+    const page = request.method === "GET" && String(request.headers.accept ?? "").includes("text/html");
+    const headers = forwardHeaders(request.headers, { host: String(host), protocol: request.protocol ?? "http" });
+    if (page) headers["accept-encoding"] = "identity";
     const upstream = http.request(
       {
         host: "127.0.0.1",
         port: this.options.port(),
         method: request.method,
         path: request.url,
-        headers: forwardHeaders(request.headers, { host: String(host), protocol: request.protocol ?? "http" }),
+        headers,
       },
       (upstreamResponse) => {
+        const html = String(upstreamResponse.headers["content-type"] ?? "").startsWith("text/html");
+        if (page && html && !upstreamResponse.headers["content-encoding"]) {
+          const chunks = [];
+          upstreamResponse.on("data", (chunk) => chunks.push(chunk));
+          upstreamResponse.on("error", () => response.destroy());
+          upstreamResponse.on("end", () => {
+            const body = injectTitlebar(Buffer.concat(chunks));
+            const out = responseHeaders(upstreamResponse.headers);
+            delete out.etag;
+            out["content-length"] = String(body.length);
+            response.writeHead(upstreamResponse.statusCode ?? 502, out);
+            response.end(body);
+          });
+          return;
+        }
         response.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders(upstreamResponse.headers));
         upstreamResponse.pipe(response);
       },

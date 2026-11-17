@@ -13,9 +13,9 @@ const LOG_LEVELS = ["debug", "info", "warn", "error"];
 /**
  * @typedef {{
  *   name: string,
+ *   desktop: { startMinimized: boolean },
  *   server: {
  *     port: number,
- *     lanPort: number,
  *     share: boolean,
  *     logLevel: "debug" | "info" | "warn" | "error",
  *     tls: { certFile?: string, keyFile?: string, days: number },
@@ -29,12 +29,11 @@ const LOG_LEVELS = ["debug", "info", "warn", "error"];
 export function defaultConfig() {
   return {
     name: "",
+    desktop: { startMinimized: false },
     server: {
-      // Loopback HTTP listener used by the host machine.
+      // Shared port: loopback HTTP and paired LAN HTTPS.
       port: 8181,
-      // HTTPS listener on every interface, open only while sharing.
-      lanPort: 8182,
-      // Start sharing at launch (headless/standalone hosts).
+      // Remember whether LAN sharing should be enabled at launch.
       share: false,
       logLevel: "info",
       tls: { certFile: undefined, keyFile: undefined, days: 397 },
@@ -82,8 +81,15 @@ export function validateConfig(input) {
     if (typeof value !== "boolean") fail(key, "true or false");
   };
   string("name", config.name, false);
+  boolean("desktop.startMinimized", config.desktop.startMinimized);
   port("server.port", config.server.port);
-  port("server.lanPort", config.server.lanPort);
+  if (config.server.lanPort !== undefined) {
+    port("server.lanPort", config.server.lanPort);
+    process.emitWarning("server.lanPort is obsolete; HTTP and HTTPS both use server.port.", {
+      code: "VCH_LAN_PORT_REMOVED",
+    });
+    delete config.server.lanPort;
+  }
   boolean("server.share", config.server.share);
   if (!LOG_LEVELS.includes(config.server.logLevel)) fail("server.logLevel", LOG_LEVELS.join(", "));
   string("server.tls.certFile", config.server.tls.certFile);
@@ -96,7 +102,7 @@ export function validateConfig(input) {
   string("ide.installPath", config.ide.installPath);
   string("projects.root", config.projects.root, false);
   strings("projects.recent", config.projects.recent);
-  if (config.server.port === config.server.lanPort) fail("server.lanPort", "a port different from server.port");
+  if (config.server.port === config.ide.port) fail("ide.port", "a port different from server.port");
   return config;
 }
 
@@ -148,7 +154,7 @@ export function applyEnv(base, env = process.env) {
   const number = (value) => (value === undefined || value === "" ? undefined : Number(value));
   if (env.VCH_NAME) config.name = env.VCH_NAME;
   if (env.VCH_SERVER_PORT) config.server.port = number(env.VCH_SERVER_PORT);
-  if (env.VCH_LAN_PORT) config.server.lanPort = number(env.VCH_LAN_PORT);
+  if (env.VCH_LAN_PORT) throw new Error("VCH_LAN_PORT is no longer supported; set VCH_SERVER_PORT for both HTTP and HTTPS.");
   if (env.VCH_SHARE) config.server.share = env.VCH_SHARE === "true";
   if (env.VCH_LOG_LEVEL) config.server.logLevel = /** @type {any} */ (env.VCH_LOG_LEVEL);
   if (env.VCH_TLS_CERT) config.server.tls.certFile = env.VCH_TLS_CERT;

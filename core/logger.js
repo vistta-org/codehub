@@ -12,6 +12,8 @@ export class Logger {
   #file;
   #handle = null;
   #level;
+  /** Optional sink for every emitted entry (used by the host app pipe). */
+  onOutput;
 
   /**
    * @param {{ file?: string, level?: string, console?: boolean }} [options]
@@ -53,6 +55,11 @@ export class Logger {
       fs.writeSync(this.#handle, `${JSON.stringify(entry)}\n`);
     } catch {
       /* logging must never stop the host */
+    }
+    try {
+      this.onOutput?.(entry);
+    } catch {
+      /* listeners must never break logging */
     }
   }
 
