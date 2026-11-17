@@ -94,14 +94,22 @@ jobs:
         run: |
           VERSION=$(node -p "require('./codehub/package.json').version")
           TAG="v$VERSION"
-          if curl -fsS -o /dev/null -H "Authorization: token $TOKEN" "$API/releases/tags/$TAG"; then
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: token $TOKEN" "$API/releases/tags/$TAG")
+          if [ "$STATUS" = "200" ]; then
             echo "Release $TAG already exists; choose a release type that bumps the version." >&2
             exit 1
           fi
           PREVIOUS=$(git -C codehub describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
           git -C codehub log --format='- %s' --invert-grep --grep='^Release v' ${PREVIOUS:+$PREVIOUS..HEAD} > notes.md
           node -e 'const body = require("fs").readFileSync("notes.md", "utf8").trim() || "No changes recorded."; process.stdout.write(JSON.stringify({ tag_name: process.env.TAG, target_commitish: process.env.SHA, name: "Vistta Code Hub " + process.env.TAG, body, draft: true, prerelease: false }))' > release.json
-          ID=$(curl -fsS -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" --data-binary @release.json "$API/releases" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).id')
+          STATUS=$(curl -sS -o response.json -w '%{http_code}' -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" --data-binary @release.json "$API/releases")
+          if [ "$STATUS" != "201" ]; then
+            echo "Creating release $TAG failed with HTTP $STATUS:" >&2
+            cat response.json >&2
+            echo >&2
+            exit 1
+          fi
+          ID=$(node -p 'JSON.parse(require("fs").readFileSync("response.json", "utf8")).id')
           echo "id=$ID" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
