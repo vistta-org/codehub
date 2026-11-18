@@ -1,12 +1,16 @@
 # Vistta Code Hub
 
-Self-hosted code-server IDE. One desktop app (Windows/Linux) runs the IDE on
-this computer and opens IDEs on other computers it has paired with; the
-Android app is a client only (it cannot run code-server's Node 24 runtime).
-The hub backend manages the IDE, projects, extensions, pairing, LAN sharing and
-the paired remote hosts; the IDE extension provides host management inside the IDE.
+**Your IDE, anywhere.** Vistta Code Hub is a self-hosted development environment
+powered by code-server. Run it on your computer or in Docker, then access your IDE
+through a browser, the desktop app, or the Android client.
 
 ## Architecture
+
+The desktop app (Windows/Linux) runs the IDE locally and opens IDEs on paired
+computers; the Android app is a client only (it cannot run code-server's Node 24
+runtime). The hub backend manages the IDE, projects, extensions, pairing, LAN
+sharing and paired remote hosts; the IDE extension provides host management
+inside the IDE.
 
 ```
 Each desktop (one app, both roles)
