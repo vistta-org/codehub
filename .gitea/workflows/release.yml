@@ -137,33 +137,15 @@ jobs:
           run: |
             const version = `${{ steps.version.outputs.result }}`.trim();
             const isPrerelease = ["alpha", "beta"].includes("${{ inputs.type }}".toLowerCase());
-            const milestone = await gitea.milestones.create("${{ inputs.type }} (" + version + ")");
-            const issues = await gitea.issues.list({ state: "closed" });
-            const types = {};
-            for (let issue of issues) {
-              const type =
-                issue.labels.find((l) => l.name.startsWith("Project/"))?.name.slice(8) +
-                "s";
-              if (type && issue.milestone == milestone.id) {
-                if (!types[type]) types[type] = `## ${type}\n`;
-                types[type] += `- ${issue.title} (#${issue.number})\n`;
-              } else if (issue.milestone == null) {
-                await gitea.issues.update(issue.number, { milestone: milestone.id });
-                if (type) {
-                  if (!types[type]) types[type] = `## ${type}\n`;
-                  types[type] += `- ${issue.title} (#${issue.number})\n`;
-                }
-              }
-            }
+            // Issues are disabled on this repository, so no milestone or issue list is built.
             const release = await gitea.releases.create({
               tag_name: "v" + version,
               target_commitish: (await git.revParse("HEAD")).trim(),
               name: "${{ inputs.type }} (" + version + ")",
-              body: [process.env.RELEASE_NOTES, ...Object.values(types)].join("\n\n"),
+              body: process.env.RELEASE_NOTES,
               draft: true,
               prerelease: isPrerelease
             });
-            await gitea.milestones.close(milestone.id);
             global.result = release.id;
 
   # Cross-compiled on Linux: js-native targets x86_64-pc-windows-gnu (MinGW + NSIS in vistta/runner).
