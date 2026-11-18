@@ -39,6 +39,10 @@ jobs:
       - name: Setup Node
         run: npm run setup:ci
 
+      - name: Install Dependencies
+        working-directory: ./codehub
+        run: npm ci
+
       - name: Unit Tests
         working-directory: ./codehub
         run: npm test
@@ -185,6 +189,10 @@ jobs:
       - name: Setup Node
         run: npm run setup:ci
 
+      - name: Install Dependencies
+        working-directory: ./codehub
+        run: npm ci
+
       - name: Install Runtime
         working-directory: ./codehub
         run: npm run install-runtime -- --platform windows
@@ -224,6 +232,10 @@ jobs:
 
       - name: Setup Node
         run: npm run setup:ci
+
+      - name: Install Dependencies
+        working-directory: ./codehub
+        run: npm ci
 
       - name: Install Runtime
         working-directory: ./codehub
@@ -267,6 +279,10 @@ jobs:
       - name: Setup Node
         run: npm run setup:ci
 
+      - name: Install Dependencies
+        working-directory: ./codehub
+        run: npm ci
+
       - name: Build Android Client
         working-directory: ./codehub
         run: |
@@ -301,6 +317,10 @@ jobs:
 
       - name: Setup Node
         run: npm run setup:ci
+
+      - name: Install Dependencies
+        working-directory: ./codehub
+        run: npm ci
 
       - name: Install Runtime
         working-directory: ./codehub
