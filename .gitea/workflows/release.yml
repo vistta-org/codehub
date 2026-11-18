@@ -141,7 +141,7 @@ jobs:
             const release = await gitea.releases.create({
               tag_name: "v" + version,
               target_commitish: (await git.revParse("HEAD")).trim(),
-              name: "${{ inputs.type }} (" + version + ")",
+              name: "v" + version,
               body: process.env.RELEASE_NOTES,
               draft: true,
               prerelease: isPrerelease
@@ -320,13 +320,22 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           docker build -f docker/Dockerfile -t "$REGISTRY/vistta/codehub:$VERSION" -t "$REGISTRY/vistta/codehub:latest" build/docker
 
+      # docker push sends each layer in one request, which Cloudflare rejects above
+      # its body limit; regctl uploads layers in 50 MB chunks instead.
       - name: Publish Image
         working-directory: ./codehub
+        env:
+          REGCTL_VERSION: v0.11.7
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          echo "$TOKEN" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
-          docker push "$REGISTRY/vistta/codehub:$VERSION"
-          docker push "$REGISTRY/vistta/codehub:latest"
+          curl -fsSL -o /tmp/regctl "https://github.com/regclient/regclient/releases/download/$REGCTL_VERSION/regctl-linux-amd64"
+          chmod +x /tmp/regctl
+          echo "$TOKEN" | /tmp/regctl registry login "$REGISTRY" -u "${{ github.actor }}" --pass-stdin
+          /tmp/regctl registry set "$REGISTRY" --blob-chunk 52428800 --blob-max 52428800
+          docker save -o /tmp/codehub-image.tar "$REGISTRY/vistta/codehub:$VERSION"
+          /tmp/regctl image import "$REGISTRY/vistta/codehub:$VERSION" /tmp/codehub-image.tar
+          rm -f /tmp/codehub-image.tar
+          /tmp/regctl image copy "$REGISTRY/vistta/codehub:$VERSION" "$REGISTRY/vistta/codehub:latest"
 
       - name: Export Image Archive
         working-directory: ./codehub
