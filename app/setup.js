@@ -5,9 +5,19 @@
  * `main` webview stays hidden (lifecycle, tray, IPC); everything visible is
  * an IDE window (`ide-window.js`). The app keeps running in the tray.
  */
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const icon = fileURLToPath(new URL("./icon.png", import.meta.url));
+
+/** Platform of the bundled runtime, which may differ from the host in cross-builds. */
+function runtimePlatform() {
+  try {
+    return JSON.parse(fs.readFileSync(new URL("../runtime/runtime-manifest.json", import.meta.url), "utf8")).platform;
+  } catch {
+    return process.platform === "win32" ? "windows" : process.platform;
+  }
+}
 
 /** Window controls the frameless IDE windows may use, and nothing else. */
 const IDE_WINDOW_CAPABILITY = {
@@ -29,7 +39,7 @@ const IDE_WINDOW_CAPABILITY = {
 /** @returns {Promise<SetupConfig>} */
 export default async function setup() {
   const bundled = process.env.NODE_ENV === "production";
-  const binary = process.platform === "win32" ? "node.exe" : "node";
+  const binary = runtimePlatform() === "windows" ? "node.exe" : "node";
   return {
     title: "Vistta Code Hub",
     icon,

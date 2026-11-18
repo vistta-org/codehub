@@ -11,6 +11,7 @@
  *   node scripts/install-runtime.js --force     # re-download even if present
  *   node scripts/install-runtime.js --version 4.141.0
  *   node scripts/install-runtime.js --check     # dry run, show plan only
+ *   node scripts/install-runtime.js --platform windows  # another OS's runtime (cross-builds; no smoke test)
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -48,6 +49,14 @@ if (hasFlag("--help") || hasFlag("-h")) {
 const FORCE = hasFlag("--force");
 const CHECK_ONLY = hasFlag("--check");
 const VERSION = getArg("--version") || process.env.CODE_SERVER_VERSION || undefined;
+const PLATFORMS = { windows: "win32", linux: "linux" };
+const TARGET = getArg("--platform");
+if (TARGET && !PLATFORMS[TARGET]) {
+  console.error(`[install-runtime] ERROR: --platform must be one of: ${Object.keys(PLATFORMS).join(", ")}`);
+  process.exit(1);
+}
+const PLATFORM = TARGET ? PLATFORMS[TARGET] : os.platform();
+const CROSS = PLATFORM !== os.platform();
 
 const log = (message) => console.log(`[install-runtime] ${message}`);
 const warn = (message) => console.warn(`[install-runtime] WARN: ${message}`);
@@ -57,8 +66,8 @@ function fatal(message) {
 }
 
 function platformInfo() {
-  const platform = os.platform();
-  const arch = os.arch();
+  const platform = PLATFORM;
+  const arch = CROSS ? "x64" : os.arch();
   if (platform === "win32") {
     if (arch !== "x64") fatal(`Unsupported Windows architecture: ${arch} (only amd64 releases are published)`);
     return { os: "windows", arch: "amd64", asset: (version) => `code-server-${version}-windows-amd64.tar.gz` };
@@ -211,7 +220,7 @@ async function main() {
 
   // 2) Already managed and not forcing → skip.
   const prev = readManifest();
-  if (prev && prev.kind === "release-binary" && prev.version && !FORCE) {
+  if (prev && prev.kind === "release-binary" && prev.version && prev.platform === plat.os && !FORCE) {
     const alreadyHavePinned = VERSION && prev.version === VERSION;
     if (!VERSION || alreadyHavePinned) {
       log(`code-server ${prev.version} already installed — nothing to do (use --force to reinstall).`);
@@ -239,7 +248,8 @@ async function main() {
     };
     fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2));
     log(`code-server ${version} installed -> ${path.relative(ROOT, CS_DIR)}`);
-    smokeTest(manifest.bin, ".exe");
+    if (CROSS) log(`smoke test skipped: a ${plat.os} runtime cannot run on this host`);
+    else smokeTest(manifest.bin, ".exe");
   } else {
     const managed = installViaNpm(VERSION);
     const manifest = {

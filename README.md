@@ -136,6 +136,11 @@ npm run dev            # starts hub + IDE, then opens the IDE window and tray
 npm run build:windows  # stage payload + NSIS installer (npm run build:linux for Linux)
 ```
 
+On Linux, `build:windows` cross-compiles the installer (MinGW + NSIS, as in the
+`vistta/runner` image) after `npm run install-runtime -- --platform windows`
+downloads the Windows code-server runtime. A cross-platform runtime cannot be
+smoke-tested on the build host.
+
 How the app runs the backend:
 
 - **Development** (`npm run dev`): one command starts the backend and IDE, waits
@@ -242,15 +247,18 @@ hostname set `VCH_TLS_CERT` and `VCH_TLS_KEY` together.
 
 ## Release pipeline
 
-`.gitea/workflows/release.yml` is started manually (`workflow_dispatch`) with a
-**type**: `Manual` (default; uses the version in `package.json` as-is) or
-`Patch`/`Minor`/`Major`/`Beta`/`Alpha` to bump the version first. A bump commits
-`Release vX.Y.Z` to `main`. The pipeline:
+`.gitea/workflows/release.yml` follows the packages' release workflow. Start it
+manually from `main` with a **type**: `Manual` (default; releases the version in
+`package.json` as-is) or `Patch`/`Minor`/`Major`/`Beta`/`Alpha` to run
+`npm version` first, which commits, tags and pushes the bump. The pipeline:
 
-1. **Validation**: installs dependencies and runs `npm test`.
-2. **Release**: bumps the version if requested and creates a draft release `vX.Y.Z`.
-3. **Windows**, **Linux**, **Android**, **Docker**: build in parallel and upload
-   their artifacts to the draft. The Docker job pushes `vX.Y.Z` and `latest` to
+1. **Validation**: `npm run setup:ci` in the workspace, then `npm test`.
+2. **Release**: AI release notes from the commits since the last `v*` tag
+   (`AI_BASE_URL`/`AI_MODEL` variables, `AI_API_KEY` secret), the version step,
+   a milestone for closed issues, and a draft release `vX.Y.Z`.
+3. **Windows**, **Linux**, **Android**, **Docker**: build in parallel on Linux
+   runners (Windows is cross-compiled in `vistta/runner`) and upload their
+   artifacts to the draft. The Docker job pushes `vX.Y.Z` and `latest` to
    `git.vistta.org/vistta/codehub` and attaches a `docker save` archive.
 4. **Publish**: marks the release public only after every build job succeeds.
 
