@@ -54,6 +54,18 @@ jobs:
         working-directory: ./codehub
         run: npm ci
 
+      - name: Module Validation
+        working-directory: ./codehub
+        run: npx vistta project outdated
+
+      - name: Eslint Validation
+        working-directory: ./codehub
+        run: npx vistta lint
+
+      - name: Typescript Validation
+        working-directory: ./codehub
+        run: npx vistta types
+
       - name: Unit Tests
         working-directory: ./codehub
         run: npm test
