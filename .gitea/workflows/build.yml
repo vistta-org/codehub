@@ -167,7 +167,7 @@ jobs:
       image: vistta/runner
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub-distribution/${{ needs.Release.outputs.version }}
     steps:
       - name: Checkout
         uses: tiagomta/checkout@v1
@@ -213,7 +213,7 @@ jobs:
       image: vistta/runner
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub-distribution/${{ needs.Release.outputs.version }}
     steps:
       - name: Checkout
         uses: tiagomta/checkout@v1
@@ -259,7 +259,7 @@ jobs:
       image: vistta/runner
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub-distribution/${{ needs.Release.outputs.version }}
       ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
     steps:
@@ -301,7 +301,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub-distribution/${{ needs.Release.outputs.version }}
       REGISTRY: git.vistta.org
     steps:
       - name: Checkout
@@ -383,8 +383,8 @@ jobs:
       TOKEN: ${{ secrets.TOKEN }}
       API: ${{ github.api_url }}/repos/${{ github.repository }}
       RELEASE_ID: ${{ needs.Release.outputs.id }}
-      FILES: ${{ github.api_url }}/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}/files
-      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
+      FILES: ${{ github.api_url }}/packages/${{ github.repository_owner }}/generic/codehub-distribution/${{ needs.Release.outputs.version }}/files
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub-distribution/${{ needs.Release.outputs.version }}
     steps:
       - name: Link Packages and Publish Release
         run: |
