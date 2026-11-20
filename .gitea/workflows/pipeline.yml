@@ -1,4 +1,5 @@
-name: Build Workflow
+name: Pipeline
+run-name: ${{ github.event_name == 'push' && format('Validation by {0}', github.actor) || inputs.type == 'None' && format('Snapshot by {0}', github.actor) || format('{0} release by {1}', inputs.type, github.actor) }}
 on:
   push:
     branches:
