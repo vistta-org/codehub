@@ -1,5 +1,8 @@
 name: Build Workflow
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       type:
@@ -24,7 +27,8 @@ on:
 env:
   ref: refs/heads/main
 
-# Every build job publishes its artifacts to the generic package registry.
+# A push runs only Validation. A manual run also builds every artifact and
+# publishes it to the generic package registry.
 # Type None skips the release. Otherwise a draft release is created and is
 # linked to the packages and published only after all builds succeed.
 jobs:
