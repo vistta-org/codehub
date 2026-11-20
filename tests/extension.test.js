@@ -3,7 +3,7 @@ import vm from "node:vm";
 import { defaultConfig } from "../core/config.js";
 import { extensionManifest, extensionScript } from "../hub/extension.js";
 
-function activate(controllable, responses, origin = "http://127.0.0.1:8181") {
+function activate(controllable, responses, origin = "http://127.0.0.1:8181", settings = {}) {
   const commands = new Map();
   const calls = [];
   const messages = [];
@@ -16,6 +16,7 @@ function activate(controllable, responses, origin = "http://127.0.0.1:8181") {
       value.default,
     ]),
   );
+  for (const [key, value] of Object.entries(settings)) values.set(key, value);
   const config = defaultConfig();
   for (const [key, value] of Object.entries(responses["/api/config"] ?? {}))
     config[key] = value && typeof value === "object" ? { ...config[key], ...value } : value;
@@ -204,6 +205,21 @@ suite("IDE host extension", () => {
     );
     assert.equal("codeHub.lanPort" in properties, false);
     assert.equal(host.values.get("hostName"), "Host");
+  });
+
+  test("a chat window opens only the Chat; other windows keep their layout", async () => {
+    const LAYOUT = [
+      "workbench.action.closeSidebar",
+      "workbench.action.closePanel",
+      "workbench.action.chat.open",
+      "workbench.action.maximizeAuxiliaryBar",
+    ];
+    const chat = activate(false, {}, undefined, { chatOnly: true });
+    await chat.ready();
+    assert.deepEqual(chat.executed, LAYOUT.map((command) => [command]));
+    const ide = activate(true, {});
+    await ide.ready();
+    assert.ok(ide.executed.every(([command]) => !LAYOUT.includes(command)));
   });
 
   test("other computers: open asks the hub for the relay, then the app for a window", async () => {

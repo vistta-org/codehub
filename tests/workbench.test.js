@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { forwardHeaders, injectTitlebar, TITLEBAR_PATH } from "../hub/proxy.js";
-import { patchWorkbench } from "../hub/workbench.js";
+import { CHAT_LAYOUT_DEFAULTS, patchWorkbench } from "../hub/workbench.js";
 
 const runtimeRoot = process.env.VCH_RUNTIME_ROOT_TEST
   ? path.resolve(process.env.VCH_RUNTIME_ROOT_TEST)
@@ -39,13 +39,38 @@ suite("workbench patch", () => {
     for (const file of runtimes) {
       const skipped = [];
       const patched = patchWorkbench(fs.readFileSync(file, "utf8"), { onSkip: (label) => skipped.push(label) });
-      for (const marker of ["vchSync", "vchOwns", "/_vch/extension", "__vchLocalAuthority", "remoteStorageEnabled:!0"])
+      for (const marker of ["vchSync", "vchOwns", "/_vch/extension", "__vchLocalAuthority", "remoteStorageEnabled:!("])
         assert.ok(patched.includes(marker), `${marker} in ${file}`);
       assert.ok(
         skipped.every((label) => !/index|session|storage|configuration/.test(label)),
         skipped.join(", "),
       );
     }
+  });
+
+  test("a ?vch=chat window gets window-only chat defaults and keeps its UI state in its own browser", () => {
+    if (!runtimes.length) return "skipped: no code-server runtime installed";
+    const patched = patchWorkbench(fs.readFileSync(runtimes[0], "utf8"));
+    const [statement, name, settings] =
+      /let ([\w$]+)=\{\.\.\.JSON\.parse\(([\w$]+)\),remoteAuthority:location\.host,remoteStorageEnabled:.*?:\{\}\)\}/.exec(
+        patched,
+      ) ?? [];
+    assert.ok(statement, "web configuration statement");
+    const configure = (search) =>
+      JSON.parse(
+        vm.runInNewContext(`${statement};JSON.stringify(${name})`, {
+          location: { search, host: "127.0.0.1:8181", protocol: "http:" },
+          URLSearchParams,
+          JSON,
+          [settings]: JSON.stringify({ configurationDefaults: { "editor.fontSize": 15 } }),
+        }),
+      );
+    const chat = configure("?folder=%2Fp&vch=chat");
+    assert.equal(chat.remoteStorageEnabled, false);
+    assert.deepEqual(chat.configurationDefaults, { "editor.fontSize": 15, ...CHAT_LAYOUT_DEFAULTS });
+    const ide = configure("?folder=%2Fp");
+    assert.equal(ide.remoteStorageEnabled, true);
+    assert.deepEqual(ide.configurationDefaults, { "editor.fontSize": 15 });
   });
 
   test("anchors apply to the installed runtime", () => {

@@ -1,13 +1,14 @@
-name: Release Workflow
+name: Build Workflow
 on:
   workflow_dispatch:
     inputs:
       type:
         description: "Release Type"
         required: true
-        default: Manual
+        default: None
         type: choice
         options:
+          - None
           - Manual
           - Patch
           - Minor
@@ -23,9 +24,9 @@ on:
 env:
   ref: refs/heads/main
 
-# Every build job uploads its artifacts to a draft release. The release is
-# published only after all of them succeed, so a failed build never leaves a
-# public, partially populated release behind.
+# Every build job publishes its artifacts to the generic package registry.
+# Type None skips the release. Otherwise a draft release is created and is
+# linked to the packages and published only after all builds succeed.
 jobs:
   Validation:
     runs-on: ubuntu-latest
@@ -70,7 +71,7 @@ jobs:
           fetch-depth: 0
 
       - name: Generate Release Notes
-        if: ${{ inputs.skip_release_notes != true && inputs.skip_release_notes != 'true' }}
+        if: ${{ inputs.type != 'None' && inputs.skip_release_notes != true && inputs.skip_release_notes != 'true' }}
         uses: tiagomta/runjs@v1
         id: notes
         env:
@@ -121,13 +122,17 @@ jobs:
             await git.config("user.email", "devops@vistta.org");
             const type = "${{ inputs.type }}".toLowerCase();
             const channel = ["alpha", "beta"].includes(type) ? type : null;
-            const version = type === "manual"
-              ? JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")).version
-              : await npm.version(...(channel ? ["prerelease", "--preid=" + channel] : [type]));
-            if (type !== "manual") await git.push("origin", "${{ env.ref }}", "--tags");
-            global.result = version.trim().replace(/^v/, "");
+            const bump = !["manual", "none"].includes(type);
+            const version = bump
+              ? await npm.version(...(channel ? ["prerelease", "--preid=" + channel] : [type]))
+              : JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")).version;
+            if (bump) await git.push("origin", "${{ env.ref }}", "--tags");
+            // run_number is the repository-wide run index, so each snapshot gets its own version.
+            const snapshot = type === "none" ? "-snapshot.${{ github.run_number }}" : "";
+            global.result = version.trim().replace(/^v/, "") + snapshot;
 
       - name: Gitea Release
+        if: ${{ inputs.type != 'None' }}
         uses: tiagomta/runjs@v1
         id: release
         env:
@@ -162,8 +167,7 @@ jobs:
       image: vistta/runner
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      API: ${{ github.api_url }}/repos/${{ github.repository }}
-      RELEASE_ID: ${{ needs.Release.outputs.id }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
     steps:
       - name: Checkout
         uses: tiagomta/checkout@v1
@@ -191,12 +195,15 @@ jobs:
           npm version "${{ needs.Release.outputs.version }}" --no-git-tag-version --allow-same-version > /dev/null
           npm run build:windows
 
-      - name: Upload Artifacts
+      # Generic packages reject duplicate files, so a rebuild of the same version replaces them.
+      - name: Publish Packages
         working-directory: ./codehub
         run: |
           for file in dist/*; do
             [ -f "$file" ] || continue
-            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+            name=$(basename "$file")
+            curl -sS -o /dev/null -X DELETE -H "Authorization: token $TOKEN" "$PACKAGES/$name"
+            curl -fsS -X PUT -H "Authorization: token $TOKEN" --upload-file "$file" "$PACKAGES/$name" > /dev/null
           done
 
   Linux:
@@ -206,8 +213,7 @@ jobs:
       image: vistta/runner
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      API: ${{ github.api_url }}/repos/${{ github.repository }}
-      RELEASE_ID: ${{ needs.Release.outputs.id }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
     steps:
       - name: Checkout
         uses: tiagomta/checkout@v1
@@ -235,12 +241,15 @@ jobs:
           npm version "${{ needs.Release.outputs.version }}" --no-git-tag-version --allow-same-version > /dev/null
           npm run build:linux
 
-      - name: Upload Artifacts
+      # Generic packages reject duplicate files, so a rebuild of the same version replaces them.
+      - name: Publish Packages
         working-directory: ./codehub
         run: |
           for file in dist/*; do
             [ -f "$file" ] || continue
-            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+            name=$(basename "$file")
+            curl -sS -o /dev/null -X DELETE -H "Authorization: token $TOKEN" "$PACKAGES/$name"
+            curl -fsS -X PUT -H "Authorization: token $TOKEN" --upload-file "$file" "$PACKAGES/$name" > /dev/null
           done
 
   Android:
@@ -250,8 +259,7 @@ jobs:
       image: vistta/runner
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      API: ${{ github.api_url }}/repos/${{ github.repository }}
-      RELEASE_ID: ${{ needs.Release.outputs.id }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
       ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
     steps:
@@ -277,12 +285,15 @@ jobs:
           npm version "${{ needs.Release.outputs.version }}" --no-git-tag-version --allow-same-version > /dev/null
           npm run build:android
 
-      - name: Upload Artifacts
+      # Generic packages reject duplicate files, so a rebuild of the same version replaces them.
+      - name: Publish Packages
         working-directory: ./codehub
         run: |
           for file in dist/*; do
             [ -f "$file" ] || continue
-            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+            name=$(basename "$file")
+            curl -sS -o /dev/null -X DELETE -H "Authorization: token $TOKEN" "$PACKAGES/$name"
+            curl -fsS -X PUT -H "Authorization: token $TOKEN" --upload-file "$file" "$PACKAGES/$name" > /dev/null
           done
 
   Docker:
@@ -290,8 +301,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TOKEN: ${{ secrets.TOKEN }}
-      API: ${{ github.api_url }}/repos/${{ github.repository }}
-      RELEASE_ID: ${{ needs.Release.outputs.id }}
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
       REGISTRY: git.vistta.org
     steps:
       - name: Checkout
@@ -341,7 +351,9 @@ jobs:
           docker save -o /tmp/codehub-image.tar "$REGISTRY/vistta/codehub:$VERSION"
           /tmp/regctl image import "$REGISTRY/vistta/codehub:$VERSION" /tmp/codehub-image.tar
           rm -f /tmp/codehub-image.tar
-          /tmp/regctl image copy "$REGISTRY/vistta/codehub:$VERSION" "$REGISTRY/vistta/codehub:latest"
+          if [ "${{ inputs.type }}" != "None" ]; then
+            /tmp/regctl image copy "$REGISTRY/vistta/codehub:$VERSION" "$REGISTRY/vistta/codehub:latest"
+          fi
 
       - name: Export Image Archive
         working-directory: ./codehub
@@ -350,16 +362,20 @@ jobs:
           mkdir -p dist
           docker save "$REGISTRY/vistta/codehub:$VERSION" | gzip > "dist/vistta-codehub-$VERSION-docker-amd64.tar.gz"
 
-      - name: Upload Artifacts
+      # Generic packages reject duplicate files, so a rebuild of the same version replaces them.
+      - name: Publish Packages
         working-directory: ./codehub
         run: |
           for file in dist/*; do
             [ -f "$file" ] || continue
-            curl -fsS -X POST -H "Authorization: token $TOKEN" -F "attachment=@$file" "$API/releases/$RELEASE_ID/assets?name=$(basename "$file")" > /dev/null
+            name=$(basename "$file")
+            curl -sS -o /dev/null -X DELETE -H "Authorization: token $TOKEN" "$PACKAGES/$name"
+            curl -fsS -X PUT -H "Authorization: token $TOKEN" --upload-file "$file" "$PACKAGES/$name" > /dev/null
           done
 
   Publish:
     needs: [Release, Windows, Linux, Android, Docker]
+    if: needs.Release.outputs.id != ''
     runs-on: ubuntu-latest
     container:
       image: node:latest
@@ -367,8 +383,23 @@ jobs:
       TOKEN: ${{ secrets.TOKEN }}
       API: ${{ github.api_url }}/repos/${{ github.repository }}
       RELEASE_ID: ${{ needs.Release.outputs.id }}
+      FILES: ${{ github.api_url }}/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}/files
+      PACKAGES: ${{ github.server_url }}/api/packages/${{ github.repository_owner }}/generic/codehub/${{ needs.Release.outputs.version }}
     steps:
-      - name: Publish Release
+      - name: Link Packages and Publish Release
         run: |
-          curl -fsS -X PATCH -H "Authorization: token $TOKEN" -H "Content-Type: application/json" -d '{"draft":false}' "$API/releases/$RELEASE_ID" > /dev/null
-          echo "Published v${{ needs.Release.outputs.version }}"
+          node --input-type=module <<'EOF'
+          const { TOKEN, API, RELEASE_ID, FILES, PACKAGES } = process.env;
+          const request = async (url, options = {}) => {
+            const response = await fetch(url, { ...options, headers: { Authorization: `token ${TOKEN}`, "Content-Type": "application/json" } });
+            if (!response.ok) throw new Error(`${options.method ?? "GET"} ${url}: ${response.status} ${await response.text()}`);
+            return response.json();
+          };
+          const files = await request(FILES);
+          if (!files.length) throw new Error("No package files to link.");
+          const release = await request(`${API}/releases/${RELEASE_ID}`);
+          const links = files.map(({ name }) => `- [${name}](${PACKAGES}/${encodeURIComponent(name)})`).join("\n");
+          const body = [release.body?.trim(), `## Downloads\n\n${links}`].filter(Boolean).join("\n\n");
+          await request(`${API}/releases/${RELEASE_ID}`, { method: "PATCH", body: JSON.stringify({ body, draft: false }) });
+          console.log(`Published ${release.tag_name}`);
+          EOF

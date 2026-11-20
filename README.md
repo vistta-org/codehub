@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" alt="Vistta Code Hub logo" width="128"></p>
+
 # Vistta Code Hub
 
 **Your IDE, anywhere.** Vistta Code Hub is a self-hosted development environment
@@ -96,6 +98,8 @@ with minimize/maximize/close and window dragging added by `hub/titlebar.js`
 The title bar and Welcome tab show the app icon (`assets/icon.png`, or
 `icon.png` in the data folder to override it).
 
+![Desktop app: the IDE with the Welcome tab, Chat and the LAN status-bar item](docs/images/desktop-ide.png)
+
 Everything else lives in the **Code Hub** status-bar menu (Local only / LAN):
 
 - **Share on LAN**, **Pair a Device** (code, browser pairing link, QR and certificate fingerprint),
@@ -105,6 +109,8 @@ Everything else lives in the **Code Hub** status-bar menu (Local only / LAN):
   the certificate fingerprint to compare with that computer. Picking a computer
   offers **Open IDE** (its IDE opens in its own window) or **Forget** (the other
   computer revokes this device and the token is deleted).
+
+![Code Hub status-bar menu with Share on LAN, Pair a Device, Other Computers and host actions](docs/images/desktop-menu.png)
 
 Only the local IDE can change host settings; IDEs opened on other computers
 cannot. Closing IDE windows leaves the app in the tray. **Show / Hide** toggles
@@ -117,8 +123,12 @@ the IDE's Code Hub menu and Settings.
 All Code Hub settings live together in that editor: LAN sharing, login startup,
 host name, projects root, HTTP / HTTPS port, IDE port, log level and workspace
 trust. Changes apply to the host configuration; the HTTP / HTTPS port requires
-a host restart. The status-bar menu and **Host Settings** command open the same
+a host restart. **Chat Only** is not a host setting: it shows only the Chat in
+every IDE window (the Android app's Chat turns it on for its own window only).
+The status-bar menu and **Host Settings** command open the same
 view, with no separate settings window or quick picker.
+
+![Code Hub settings in the IDE Settings editor](docs/images/desktop-settings.png)
 
 **Start Minimized** keeps the desktop app hidden in the tray on every launch,
 including manual launches. The hub and IDE still start; use **Show / Hide** in
@@ -186,17 +196,24 @@ address and code manually.
 
 ## Android app (client)
 
-`client/` is a client-only Android app styled like VS Code's side bar (Dark
-Modern colours with the logo orange as accent; the IDE gets the same accent by
+`client/` is a client-only Android app styled like VS Code's side bar and
+welcome cards (Dark Modern colours with the logo orange as accent; the IDE gets the same accent by
 default through the Code Hub extension unless you set your own
-`workbench.colorCustomizations`). Its **Computers** tree lists the computers this phone paired
-with and each one's IDE state (running, stopped, offline, unpaired); expanding a
-computer shows **Open IDE**, its **Projects** and **Forget**. Errors appear as
+`workbench.colorCustomizations`). Under **Computers**, each computer this phone
+paired with is a card that shows its IDE state (running, stopped, offline,
+unpaired). A reachable computer offers **Chat** and **Open IDE**, its
+**Projects** (each with its own chat button) and **Forget**. An unreachable or
+unpaired computer shows why, with **Retry**. Other errors appear as
 notifications that explain unreachable or untrusted computers and keep the
 native message as a detail. Pairing: on the computer turn on **Share on LAN**
 and choose **Pair a Device**, then on the phone **Scan QR Code** (a camera view
 with **Cancel**; checks the certificate fingerprint in the QR) or **Enter
 Address** (shows the fingerprint for you to compare).
+
+**Chat** opens the computer's IDE with only its Chat visible: same sessions,
+models and agent tools as the desktop IDE, and the layout of other IDE windows
+does not change. See [docs/chat.md](docs/chat.md) for the design and the next
+phases.
 
 ```powershell
 npm run client:android  # dev build on a connected device (adb)
@@ -249,30 +266,11 @@ accepted from loopback, so published ports always use HTTPS. Pair a device with
 The certificate covers the container hostname and interface IPs; for a public
 hostname set `VCH_TLS_CERT` and `VCH_TLS_KEY` together.
 
-## Release pipeline
-
-`.gitea/workflows/release.yml` follows the packages' release workflow. Start it
-manually from `main` with a **type**: `Manual` (default; releases the version in
-`package.json` as-is) or `Patch`/`Minor`/`Major`/`Beta`/`Alpha` to run
-`npm version` first, which commits, tags and pushes the bump. The pipeline:
-
-1. **Validation**: `npm run setup:ci` in the workspace, then `npm test`.
-2. **Release**: AI release notes from the commits since the last `v*` tag
-   (`AI_BASE_URL`/`AI_MODEL` variables, `AI_API_KEY` secret), the version step,
-   a milestone for closed issues, and a draft release `vX.Y.Z`.
-3. **Windows**, **Linux**, **Android**, **Docker**: build in parallel on Linux
-   runners (Windows is cross-compiled in `vistta/runner`) and upload their
-   artifacts to the draft. The Docker job pushes `vX.Y.Z` and `latest` to
-   `git.vistta.org/vistta/codehub` and attaches a `docker save` archive.
-4. **Publish**: marks the release public only after every build job succeeds.
-
-The Docker tags are pushed before publishing, so a failed later job can leave
-them live while the release stays a draft.
-
 ## Tests
 
 ```powershell
-npm test: Android client, config, devices, IDE extension, hub lifecycle, projects, router, tls, workbench
+npm test
+: Android client, config, devices, IDE extension, hub lifecycle, projects, router, tls, workbench
 ```
 
 The suite boots real hubs on free ports, exchanges real pairing codes over HTTP,

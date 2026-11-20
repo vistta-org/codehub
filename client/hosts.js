@@ -122,3 +122,14 @@ export function connectionProblem(message, origin) {
 export function idePath(target) {
   return typeof target === "string" && target.startsWith("/") && !target.startsWith("//") ? target : "/";
 }
+
+/**
+ * The same IDE path as a chat window: the hub's workbench shows only the Chat
+ * when the query has `vch=chat`.
+ * @param {unknown} target
+ */
+export function chatPath(target) {
+  const url = new URL(idePath(target), "https://ide.invalid");
+  url.searchParams.set("vch", "chat");
+  return url.pathname + url.search + url.hash;
+}

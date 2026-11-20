@@ -147,6 +147,16 @@ export const extensionManifest = {
           order: 8,
           description: "Enable workspace trust in the IDE.",
         },
+        // Window default of a `?vch=chat` window (the Android app's Chat action).
+        "codeHub.chatOnly": {
+          type: "boolean",
+          default: false,
+          scope: "application",
+          ignoreSync: true,
+          order: 9,
+          description:
+            "Show only the Chat in IDE windows: the side bar, panel and editors stay closed. The Android app's Chat action turns this on for its own window.",
+        },
       },
     },
     commands: [

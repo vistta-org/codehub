@@ -387,6 +387,18 @@ exports.activate = (context) => {
   }, 1000);
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
   void refresh().then(syncSettings).catch(notify);
+  if (settings().get("chatOnly")) void chatLayout().catch(notify);
 };
+
+/** Chat window (`?vch=chat`): the Chat fills the window; side bar, panel and editors stay closed. */
+async function chatLayout() {
+  for (const command of [
+    "workbench.action.closeSidebar",
+    "workbench.action.closePanel",
+    "workbench.action.chat.open",
+    "workbench.action.maximizeAuxiliaryBar",
+  ])
+    await vscode.commands.executeCommand(command);
+}
 
 exports.deactivate = () => undefined;

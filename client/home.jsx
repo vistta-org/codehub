@@ -1,20 +1,21 @@
 /**
- * Android client, laid out like VS Code's side bar: the computers this phone
- * paired with as a tree (IDE state, Open IDE, projects, Forget), a welcome
- * view when there are none, notifications and a status bar. Open IDE signs in
- * with a one-time ticket and opens the IDE full screen (trusting only that
- * computer's pinned CA).
+ * Android client, styled like VS Code's side bar and welcome cards: one card
+ * per paired computer (status, Chat, Open IDE, projects, Forget), a welcome
+ * view when there are none, notifications and a status bar. Chat and Open IDE
+ * sign in with a one-time ticket and open the IDE full screen (trusting only
+ * that computer's pinned CA); Chat opens the IDE with only its Chat visible.
  */
 import { Component, Form } from "@vistta/js";
 import { Button, Icon, Input } from "@vistta/ui";
-import { computers, forget, openIde, openProject, pair, projects, status } from "./api.js";
+import { computers, forget, openChat, openIde, openProject, pair, projects, status } from "./api.js";
 import { parsePairingQr } from "./hosts.js";
 
 const ICON = {
   COMPUTER: "e30a",
   SCAN: "f206",
   ADD: "e145",
-  OPEN: "e037",
+  CHAT: "e0b7",
+  CODE: "e86f",
   FOLDER: "e2c7",
   FORGET: "e16f",
   REFRESH: "e5d5",
@@ -22,6 +23,7 @@ const ICON = {
   COLLAPSED: "e5cc",
   EXPANDED: "e5cf",
   ERROR: "e000",
+  WARNING: "e002",
   INFO: "e88e",
   REMOTE: "eb2f",
   LOADING: "loading",
@@ -45,6 +47,9 @@ const COLOR = {
 
 /** IDE state → status color. */
 const IDE_COLOR = { running: COLOR.success, starting: COLOR.warning, stopping: COLOR.warning };
+
+/** A status color as a translucent fill (hex color + alpha). @param {string} color */
+const tint = (color) => `${color}26`;
 
 const flat = { textShadow: "none!", boxShadow: "none!" };
 
@@ -115,18 +120,128 @@ const countBadge = /** @type {JSX.StyleObject} */ ({
   textAlign: "center",
 });
 
-const tree = /** @type {JSX.StyleObject} */ ({ flex: 1, overflowY: "auto", paddingBottom: "4rem" });
+const tree = /** @type {JSX.StyleObject} */ ({
+  display: "flex",
+  flexDirection: "column",
+  gap: "3rem",
+  flex: 1,
+  overflowY: "auto",
+  padding: "1rem 3rem 4rem",
+});
+
+/** One computer, like a VS Code welcome-page card. */
+const card = /** @type {JSX.StyleObject} */ ({
+  flex: "none",
+  background: COLOR.editor,
+  border: `1px solid ${COLOR.border}`,
+  radius: "2rem",
+  overflow: "hidden",
+});
+
+const cardHeader = /** @type {JSX.StyleObject} */ ({
+  display: "flex",
+  alignItems: "center",
+  gap: "3rem",
+  width: "100%",
+  minHeight: "16rem",
+  padding: "3rem 3rem 3rem 4rem",
+  background: "none",
+  color: COLOR.fore,
+  radius: "0",
+  textAlign: "left",
+  ":active": { background: COLOR.hover },
+  ...flat,
+});
+
+/** @param {string} color */
+const avatar = (color) =>
+  /** @type {JSX.StyleObject} */ ({
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "none",
+    width: "10rem",
+    height: "10rem",
+    radius: "2rem",
+    background: tint(color),
+    color,
+    fontSize: "5rem",
+  });
+
+const ellipsis = /** @type {JSX.StyleObject} */ ({
+  display: "block",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+});
+
+/** @param {string} color */
+const pill = (color) =>
+  /** @type {JSX.StyleObject} */ ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "1.5rem",
+    flex: "none",
+    padding: "1rem 3rem",
+    radius: "8rem",
+    background: tint(color),
+    color: COLOR.fore,
+    fontSize: "3rem",
+  });
+
+const problem = /** @type {JSX.StyleObject} */ ({
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "2.5rem",
+  margin: "0 3rem 3rem",
+  padding: "3rem",
+  background: tint(COLOR.error),
+  border: `1px solid ${COLOR.error}66`,
+  radius: "1.5rem",
+  fontSize: "3.25rem",
+  lineHeight: 1.45,
+});
+
+const actionsRow = /** @type {JSX.StyleObject} */ ({ display: "flex", gap: "2.5rem", padding: "0 3rem 3rem" });
+
+/** Chat / Open IDE: large touch targets, VS Code button colors. @param {"primary" | "secondary"} variant */
+const bigAction = (variant) =>
+  /** @type {JSX.StyleObject} */ ({
+    variant,
+    position: "relative",
+    flex: 1,
+    minWidth: 0,
+    minHeight: "12rem",
+    radius: "1.5rem",
+    fontSize: "3.5rem",
+    ...flat,
+  });
+
+const divider = /** @type {JSX.StyleObject} */ ({ borderTop: `1px solid ${COLOR.border}` });
 
 const welcome = /** @type {JSX.StyleObject} */ ({
   display: "flex",
   flexDirection: "column",
   gap: "3rem",
-  padding: "2rem 5rem",
+  flex: "none",
+  padding: "5rem 4rem",
+  background: COLOR.editor,
+  border: `1px solid ${COLOR.border}`,
+  radius: "2rem",
   lineHeight: 1.45,
 });
 
+const welcomeIcon = /** @type {JSX.StyleObject} */ ({ ...avatar(COLOR.accent), alignSelf: "center", width: "16rem", height: "16rem", fontSize: "8rem" });
+
 const wide = (variant) =>
-  /** @type {JSX.StyleObject} */ ({ variant, width: "100%", maxWidth: "90rem", minHeight: "10rem", ...flat });
+  /** @type {JSX.StyleObject} */ ({
+    variant,
+    position: "relative",
+    width: "100%",
+    minHeight: "12rem",
+    radius: "1.5rem",
+    ...flat,
+  });
 
 const paragraph = /** @type {JSX.StyleObject} */ ({ margin: 0 });
 
@@ -232,7 +347,7 @@ function hostOf(origin) {
 
 /**
  * One VS Code tree row, sized for touch.
- * @extends {Component<{ icon: string, label: string, description?: string, badge?: string, tone?: string, depth?: number, chevron?: "open" | "closed", loading?: boolean, disabled?: boolean, onClick?: () => void }>}
+ * @extends {Component<{ icon: string, label: string, description?: string, tone?: string, depth?: number, chevron?: "open" | "closed", loading?: boolean, disabled?: boolean, onClick?: () => void }>}
  */
 class Row extends Component {
   render() {
@@ -249,7 +364,7 @@ class Row extends Component {
           minHeight: "11rem",
           padding: `0 4rem 0 ${2 + (this.depth ?? 0) * 5}rem`,
           background: "none",
-          color: COLOR.fore,
+          color: this.tone ?? COLOR.fore,
           radius: "0",
           textAlign: "left",
           fontSize: "3.5rem",
@@ -261,50 +376,23 @@ class Row extends Component {
         <span style={{ display: "inline-flex", width: "5rem", flex: "none", color: COLOR.fore }}>
           {this.chevron && <Icon code={this.chevron === "open" ? ICON.EXPANDED : ICON.COLLAPSED} />}
         </span>
-        <span style={{ display: "inline-flex", flex: "none", color: this.tone ?? COLOR.fore }}>
+        <span style={{ display: "inline-flex", flex: "none" }}>
           <Icon code={this.loading ? ICON.LOADING : this.icon} />
         </span>
-        <span style={{ flex: "none", maxWidth: "60%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {this.label}
-        </span>
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            color: COLOR.muted,
-            fontSize: "3.25rem",
-          }}
-        >
+        <span style={{ ...ellipsis, flex: "none", maxWidth: "60%" }}>{this.label}</span>
+        <span style={{ ...ellipsis, flex: 1, minWidth: 0, color: COLOR.muted, fontSize: "3.25rem" }}>
           {this.description ?? ""}
         </span>
-        {this.badge && (
-          <span
-            style={{
-              flex: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "1.5rem",
-              fontSize: "3rem",
-              color: COLOR.muted,
-            }}
-          >
-            <span style={{ width: "2rem", height: "2rem", radius: "50%", background: this.tone ?? COLOR.muted }} />
-            {this.badge}
-          </span>
-        )}
       </button>
     );
   }
 }
 
 /**
- * A paired computer and its children: Open IDE, Projects (lazy), Forget.
- * @extends {Component<{ computer: import("./api.js").Computer, status?: { online: boolean, paired: boolean, ide?: string, error?: string }, busy: string, run: (key: string, task: () => Promise<unknown>) => Promise<void>, onForget: () => void }>}
+ * A paired computer as a card: status, Chat and Open IDE, Projects (lazy), Forget.
+ * @extends {Component<{ computer: import("./api.js").Computer, status?: { online: boolean, paired: boolean, ide?: string, error?: string }, busy: string, run: (key: string, task: () => Promise<unknown>) => Promise<void>, onRetry: () => void, onForget: () => void }>}
  */
-class ComputerNode extends Component {
+class ComputerCard extends Component {
   expanded = true;
   projectsOpen = false;
   /** @type {{ name: string, path: string }[] | undefined} */
@@ -337,69 +425,107 @@ class ComputerNode extends Component {
   }
 
   render() {
+    const id = this.computer.id;
     return (
-      <div>
-        <Row
-          chevron={this.expanded ? "open" : "closed"}
-          icon={ICON.COMPUTER}
-          label={this.computer.name}
-          description={hostOf(this.computer.origin)}
-          badge={this.badge}
-          tone={this.tone}
-          onClick={() => (this.expanded = !this.expanded)}
-        />
-        {this.expanded && this.status && !this.ready && (
-          <p
-            style={{ margin: 0, padding: "1rem 4rem 2rem 14rem", color: COLOR.muted, fontSize: "3.25rem", lineHeight: 1.45 }}
-          >
-            {this.status.error}
-          </p>
-        )}
-        {this.expanded && (
-          <Row
-            depth={1}
-            icon={ICON.OPEN}
-            label="Open IDE"
-            tone={this.ready ? COLOR.success : undefined}
-            disabled={!this.ready}
-            loading={this.busy === `open:${this.computer.id}`}
-            onClick={() => this.run(`open:${this.computer.id}`, () => openIde(this.computer))}
-          />
-        )}
-        {this.expanded && (
-          <Row
-            depth={1}
-            chevron={this.projectsOpen ? "open" : "closed"}
-            icon={ICON.FOLDER}
-            label="Projects"
-            disabled={!this.ready}
-            loading={this.busy === `projects:${this.computer.id}`}
-            onClick={() => this.toggleProjects()}
-          />
-        )}
-        {this.expanded && this.projectsOpen && this.projectList?.length === 0 && (
-          <p style={{ margin: 0, padding: "2rem 4rem 2rem 19rem", color: COLOR.muted, fontSize: "3.25rem" }}>
-            No projects in the projects folder yet.
-          </p>
-        )}
-        {this.expanded &&
-          this.projectsOpen &&
-          this.projectList?.map((project) => (
-            <Row
-              key={project.path}
-              depth={2}
-              icon={ICON.FOLDER}
-              label={project.name}
-              loading={this.busy === `project:${project.path}`}
-              onClick={() => this.run(`project:${project.path}`, () => openProject(this.computer, project))}
+      <section style={card}>
+        <button type="button" style={cardHeader} onClick={() => (this.expanded = !this.expanded)}>
+          <span style={avatar(this.ready ? COLOR.accent : COLOR.muted)}>
+            <Icon code={ICON.COMPUTER} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ ...ellipsis, fontSize: "3.75rem", fontWeight: 600 }}>{this.computer.name}</span>
+            <span style={{ ...ellipsis, marginTop: "0.5rem", color: COLOR.muted, fontSize: "3rem" }}>
+              {hostOf(this.computer.origin)}
+            </span>
+          </span>
+          <span style={pill(this.tone)}>
+            <span style={{ width: "2rem", height: "2rem", radius: "50%", background: this.tone }} />
+            {this.badge}
+          </span>
+          <span style={{ display: "inline-flex", color: COLOR.muted }}>
+            <Icon code={this.expanded ? ICON.EXPANDED : ICON.COLLAPSED} />
+          </span>
+        </button>
+        {this.status && !this.ready && (
+          <div style={problem}>
+            <span style={{ display: "inline-flex", paddingTop: "0.5rem", color: COLOR.error }}>
+              <Icon code={ICON.WARNING} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{this.status.error}</span>
+            <Button
+              style={{ variant: "secondary", flex: "none", radius: "1rem", ...flat }}
+              label="Retry"
+              loading={this.busy === "refresh"}
+              onClick={() => this.onRetry()}
             />
-          ))}
-        {this.expanded && <Row depth={1} icon={ICON.FORGET} label="Forget" onClick={() => this.onForget()} />}
-      </div>
+          </div>
+        )}
+        {this.expanded && this.ready && (
+          <div style={actionsRow}>
+            <Button
+              style={bigAction("primary")}
+              icon={ICON.CHAT}
+              label="Chat"
+              disabled={!this.ready}
+              loading={this.busy === `chat:${id}`}
+              onClick={() => this.run(`chat:${id}`, () => openChat(this.computer))}
+            />
+            <Button
+              style={bigAction("secondary")}
+              icon={ICON.CODE}
+              label="Open IDE"
+              disabled={!this.ready}
+              loading={this.busy === `open:${id}`}
+              onClick={() => this.run(`open:${id}`, () => openIde(this.computer))}
+            />
+          </div>
+        )}
+        {this.expanded && (
+          <div style={divider}>
+            {this.ready && (
+              <Row
+                chevron={this.projectsOpen ? "open" : "closed"}
+                icon={ICON.FOLDER}
+                label="Projects"
+                description={this.projectList ? String(this.projectList.length) : ""}
+                loading={this.busy === `projects:${id}`}
+                onClick={() => this.toggleProjects()}
+              />
+            )}
+            {this.ready && this.projectsOpen && this.projectList?.length === 0 && (
+              <p style={{ margin: 0, padding: "2rem 4rem 3rem 14rem", color: COLOR.muted, fontSize: "3.25rem" }}>
+                No projects in the projects folder yet.
+              </p>
+            )}
+            {this.ready &&
+              this.projectsOpen &&
+              this.projectList?.map((project) => (
+                <div key={project.path} style={{ display: "flex", alignItems: "center", paddingRight: "2rem" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Row
+                      depth={1}
+                      icon={ICON.FOLDER}
+                      label={project.name}
+                      loading={this.busy === `project:${project.path}`}
+                      onClick={() => this.run(`project:${project.path}`, () => openProject(this.computer, project))}
+                    />
+                  </div>
+                  <Button
+                    name={`Chat in ${project.name}`}
+                    style={action}
+                    icon={this.busy === `chat:${project.path}` ? ICON.LOADING : ICON.CHAT}
+                    disabled={!!this.busy}
+                    onClick={() => this.run(`chat:${project.path}`, () => openChat(this.computer, project))}
+                  />
+                </div>
+              ))}
+            <Row icon={ICON.FORGET} label="Forget" tone={COLOR.muted} onClick={() => this.onForget()} />
+          </div>
+        )}
+      </section>
     );
   }
 }
-
 export default class Home extends Component {
   state = computers();
   /** @type {Record<string, { online: boolean, paired: boolean, ide?: string, error?: string }>} */
@@ -421,6 +547,7 @@ export default class Home extends Component {
     if (this.busy === "scan") return "Waiting for a QR code…";
     if (this.busy === "pair") return "Pairing…";
     if (this.busy === "refresh") return "Checking computers…";
+    if (this.busy.startsWith("chat:")) return "Opening Chat…";
     if (this.busy.startsWith("open:") || this.busy.startsWith("project:")) return "Opening IDE…";
     if (this.busy.startsWith("projects:")) return "Loading projects…";
     if (this.busy.startsWith("forget:")) return "Forgetting…";
@@ -543,12 +670,13 @@ export default class Home extends Component {
         </div>
         <div style={tree}>
           {this.state.list.map((computer) => (
-            <ComputerNode
+            <ComputerCard
               key={computer.id}
               computer={computer}
               status={this.statuses[computer.id]}
               busy={this.busy}
               run={(key, task) => this.run(key, task)}
+              onRetry={() => this.run("refresh", () => this.refresh())}
               onForget={() => this.forget(computer)}
             />
           ))}
@@ -566,6 +694,9 @@ export default class Home extends Component {
           )}
           {!this.adding && this.state.list.length === 0 && (
             <div style={welcome}>
+              <span style={welcomeIcon}>
+                <Icon code={ICON.COMPUTER} />
+              </span>
               <p style={paragraph}>You have not paired with a computer yet.</p>
               <p style={paragraph}>
                 On a computer running Vistta Code Hub, open the Code Hub menu in the status bar, turn on Share on LAN and

@@ -4,7 +4,7 @@
  * hub's own CA, pinned at pairing time. Device tokens stay in app storage.
  */
 import { Context } from "@vistta/js";
-import { connectionProblem, deviceName, hostOrigin, idePath, pairingCode, sameFingerprint } from "./hosts.js";
+import { chatPath, connectionProblem, deviceName, hostOrigin, idePath, pairingCode, sameFingerprint } from "./hosts.js";
 
 /**
  * @typedef {{ id: string, name: string, origin: string, ca: string, fingerprint: string, token: string, pairedAt: string }} Computer
@@ -178,6 +178,17 @@ export async function openIde(computer, target = "/") {
 export async function openProject(computer, project) {
   const opened = await call(computer, "/api/projects/open", { method: "POST", body: { project: project.path } });
   await openIde(computer, opened?.url);
+}
+
+/**
+ * Opens only the IDE's Chat, in a project or (without one) the last folder the IDE opened.
+ * @param {Computer} computer @param {{ path: string }} [project]
+ */
+export async function openChat(computer, project) {
+  const opened = project
+    ? await call(computer, "/api/projects/open", { method: "POST", body: { project: project.path } })
+    : undefined;
+  await openIde(computer, chatPath(opened?.url ?? "/"));
 }
 
 /**

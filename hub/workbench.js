@@ -16,6 +16,18 @@ import path from "node:path";
 export const SHARED_INDEX_FILE = ".vch-shared-index";
 export const EXTENSION_PATH = "/_vch/extension";
 export const WORKBENCH_FILE = "lib/vscode/out/vs/code/browser/workbench/workbench.js";
+/** Query marker (`?vch=chat`) for a window that shows only the Chat. */
+export const CHAT_MARKER = "chat";
+/** Window-only defaults for the chat window; the user's own settings still win. */
+export const CHAT_LAYOUT_DEFAULTS = {
+  "codeHub.chatOnly": true,
+  "workbench.activityBar.location": "hidden",
+  "workbench.statusBar.visible": false,
+  "workbench.layoutControl.enabled": false,
+  "workbench.navigationControl.enabled": false,
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+};
 const TOMBSTONE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function capture(source, pattern, label) {
@@ -93,13 +105,17 @@ export function patchWorkbench(source, { onSkip } = {}) {
   );
   // UI state (chat session list, model choices, workspace state) goes to the server's storage
   // channel instead of each browser's IndexedDB, so every client sees the same state.
+  // A `?vch=chat` window gets chat-only defaults and keeps its UI state in its own browser,
+  // so its layout never reaches other windows; its sessions still sync through the shared index.
+  const chatWindow = `new URLSearchParams(location.search).get("vch")===${JSON.stringify(CHAT_MARKER)}`;
   out = replaceOnce(
     out,
     /let ([\w$]+)=\{\.\.\.JSON\.parse\(([\w$]+)\),remoteAuthority:location\.host\}/,
     "web configuration",
     ([, config, settings]) =>
-      `let ${config}={...JSON.parse(${settings}),remoteAuthority:location.host,remoteStorageEnabled:!0,` +
-      `additionalBuiltinExtensions:[...(JSON.parse(${settings}).additionalBuiltinExtensions||[]),{scheme:location.protocol.slice(0,-1),authority:location.host,path:${JSON.stringify(EXTENSION_PATH)}}]}`,
+      `let ${config}={...JSON.parse(${settings}),remoteAuthority:location.host,remoteStorageEnabled:!(${chatWindow}),` +
+      `additionalBuiltinExtensions:[...(JSON.parse(${settings}).additionalBuiltinExtensions||[]),{scheme:location.protocol.slice(0,-1),authority:location.host,path:${JSON.stringify(EXTENSION_PATH)}}],` +
+      `...(${chatWindow}?{configurationDefaults:{...JSON.parse(${settings}).configurationDefaults,...${JSON.stringify(CHAT_LAYOUT_DEFAULTS)}}}:{})}`,
   );
   // Workspace storage IDs hash the folder URI, whose authority is the address the client used.
   // Hash it as the host's loopback address so LAN and local clients share storage and chat sessions.

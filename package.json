@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "@vistta/codehub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Your IDE, anywhere. A self-hosted development environment powered by code-server. Run it on your computer or in Docker; access it through a browser, the desktop app, or the Android client.",
   "type": "module",
   "main": "server.js",

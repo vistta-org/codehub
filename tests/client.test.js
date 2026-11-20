@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  chatPath,
   connectionProblem,
   deviceName,
   hostOrigin,
@@ -124,5 +125,12 @@ suite("android client", () => {
     assert.equal(idePath("//evil.example/"), "/");
     assert.equal(idePath("https://evil.example/"), "/");
     assert.equal(idePath(undefined), "/");
+  });
+
+  test("chat targets add the chat marker to the same IDE path, never off-site", () => {
+    assert.equal(chatPath("/?folder=C%3A%5Cp%5Ccodehub"), "/?folder=C%3A%5Cp%5Ccodehub&vch=chat");
+    assert.equal(chatPath("/"), "/?vch=chat");
+    assert.equal(chatPath("/?vch=ide"), "/?vch=chat");
+    assert.equal(chatPath("//evil.example/"), "/?vch=chat");
   });
 });
