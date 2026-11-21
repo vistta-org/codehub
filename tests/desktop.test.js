@@ -108,14 +108,15 @@ suite("desktop app", () => {
 
   for (const startMinimized of [false, true]) {
     test(`desktop launch ${startMinimized ? "stays in the tray" : "opens the IDE"} and tray Show opens the IDE`, async () => {
-      let handler;
+      /** @type {Array<(event: { id: string }) => void>} */
+      const handlers = [];
       const calls = [];
       const Home = load("home.jsx", {
         "@vistta/js-native/plugins": {
           Accessibility: {
             setShortcuts: async () => true,
             onLaunchAction: (callback) => {
-              handler = callback;
+              handlers.push(callback);
             },
           },
         },
@@ -135,6 +136,8 @@ suite("desktop app", () => {
       }).default;
       await new Home().onConnect();
       assert.deepEqual(calls, startMinimized ? ["hub"] : ["hub", "ide"]);
+      const handler = handlers[0];
+      assert.ok(handler);
       handler({ id: "show" });
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(calls.at(-1), "ide");
