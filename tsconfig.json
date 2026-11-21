@@ -1,5 +1,17 @@
 {
   "extends": "@vistta/js/config",
   "include": ["./**/*.js", "./**/*.jsx", "./**/*.d.ts"],
-  "exclude": ["./build/**", "./dist/**", "./data/**", "./runtime/**", "./node_modules/**"]
+  "exclude": ["./build/**", "./dist/**", "./data/**", "./runtime/**", "./node_modules/**"],
+  "cli": {
+    "lint": {
+      "env": { "browser": true, "node": true },
+      "languageOptions": {
+        "globals": {
+          "suite": true,
+          "test": true,
+          "structuredClone": true
+        }
+      }
+    }
+  }
 }
