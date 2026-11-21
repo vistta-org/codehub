@@ -6,15 +6,18 @@
  * page itself only needs IPC.
  */
 import { style } from "@vistta/ui";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const icon = fileURLToPath(new URL("../assets/icon.png", import.meta.url));
+const defaultKeystore = join(import.meta.dirname, "../android.keystore");
 
 /** @typedef {Record<string, any>} SetupConfig */
 
 /** @returns {Promise<SetupConfig>} */
 export default async function setup() {
-  const keystore = process.env.ANDROID_KEYSTORE;
+  const keystore = process.env.ANDROID_KEYSTORE || defaultKeystore;
   return {
     title: "Vistta Code Hub",
     icon,
@@ -53,7 +56,7 @@ export default async function setup() {
       "connect-src": "'self' ipc: http://ipc.localhost",
       "img-src": "'self' data: blob:",
     },
-    ...(process.env.NODE_ENV === "production" && keystore
+    ...(process.env.NODE_ENV === "production" && existsSync(keystore)
       ? { keystore: { file: keystore, password: process.env.ANDROID_KEYSTORE_PASSWORD } }
       : {}),
   };

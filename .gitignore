@@ -13,6 +13,9 @@ node_modules/
 /build
 /dist
 
+# local secrets (ANDROID_KEYSTORE_PASSWORD)
+.env
+
 *.log
 .DS_Store
 Thumbs.db

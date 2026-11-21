@@ -217,8 +217,13 @@ phases.
 
 ```powershell
 npm run client:android  # dev build on a connected device (adb)
-npm run build:android   # release APK in dist/ (keystore auto-generated unless ANDROID_KEYSTORE is set)
+npm run build:android   # release APK in dist/
 ```
+
+Release APKs are signed with the committed `android.keystore` (or the file in
+`ANDROID_KEYSTORE` if set). The password comes from `ANDROID_KEYSTORE_PASSWORD`:
+locally from the gitignored `.env`, in CI from the repository secret of the same
+name. Keep the same keystore, or installed apps cannot update.
 
 Android does not trust each hub's own CA, so the app pins it per computer with
 js-native's `Pinned` bridge: API calls go through native HTTPS that trusts only
