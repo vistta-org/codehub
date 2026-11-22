@@ -20,7 +20,7 @@
     "client:android": "vistta run ./client android --setup=./client/setup.js --out=build/client-android --dev",
     "stage": "node scripts/stage.js",
     "build:windows": "npm run stage && vistta build ./app windows --setup=./app/setup.js --build=build/app --out=dist --name=vistta-code-hub --target=nsis",
-    "build:linux": "npm run stage && vistta build ./app linux --setup=./app/setup.js --build=build/app --out=dist --name=vistta-code-hub --target=deb,appimage",
+    "build:linux": "npm run stage && vistta build ./app linux --setup=./app/setup.js --build=build/app --out=dist --name=vistta-code-hub --target=deb,rpm,appimage",
     "build:android": "vistta build ./client android --setup=./client/setup.js --build=build/client-android --out=dist --name=vistta-code-hub-client --target=apk"
   },
   "repository": {

@@ -1,26 +1,32 @@
 name: Automations
-run-name: ${{ github.event_name == 'push' && format('Validation by {0}', github.actor) || inputs.type == 'None' && format('Snapshot by {0}', github.actor) || format('{0} release by {1}', inputs.type, github.actor) }}
+run-name: ${{ github.event_name == 'push' && format('Validation by {0}', github.actor) || inputs.release == 'skip' && format('Validation by {0}', github.actor) || inputs.release == 'snapshot' && format('Snapshot by {0}', github.actor) || format('{0} release by {1}', inputs.release, github.actor) }}
 on:
   push:
     branches:
       - main
   workflow_dispatch:
     inputs:
-      type:
-        description: "Release Type"
+      validation:
+        description: "Run validation (lint, types, and tests) before publishing"
+        required: false
+        default: true
+        type: boolean
+      release:
+        description: "skip publishes nothing; manual publishes or replaces the package.json version; others publish a snapshot or a new version"
         required: true
-        default: None
+        default: skip
         type: choice
         options:
-          - None
-          - Manual
-          - Patch
-          - Minor
-          - Major
-          - Beta
-          - Alpha
-      skip_release_notes:
-        description: "Skip AI release notes generation (leave release notes empty)"
+          - skip
+          - manual
+          - snapshot
+          - alpha
+          - beta
+          - patch
+          - minor
+          - major
+      release_notes:
+        description: "Generate AI release notes (ignored for snapshot)"
         required: false
         default: false
         type: boolean
@@ -28,12 +34,16 @@ on:
 env:
   ref: refs/heads/main
 
-# A push runs only Validation. A manual run also builds every artifact and
-# publishes it to the generic package registry.
-# Type None skips the release. Otherwise a draft release is created and is
-# linked to the packages and published only after all builds succeed.
+# A push runs only Validation. A manual run can skip Validation; any release
+# other than skip builds the artifacts and publishes them to the generic package registry.
+# snapshot creates no release and never moves the Docker latest tag.
+# manual uses the package.json version: it moves tag v<version> to HEAD and
+# updates that release when it exists, or creates it otherwise.
+# alpha, beta, patch, minor, and major bump the version and create a new release.
+# New releases stay drafts until the build succeeds.
 jobs:
   Validation:
+    if: github.event_name == 'push' || inputs.validation == true || inputs.validation == 'true'
     runs-on: ubuntu-latest
     container:
       image: node:latest
@@ -66,6 +76,7 @@ jobs:
         working-directory: ./codehub
         run: npx vistta types
 
+
       - name: Unit Tests
         working-directory: ./codehub
         run: npm test
@@ -75,7 +86,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: node:latest
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    # always() lets the job run when Validation was skipped, but not when it failed.
+    if: always() && (needs.Validation.result == 'success' || needs.Validation.result == 'skipped') && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release != 'skip'
     outputs:
       id: ${{ steps.release.outputs.result }}
       version: ${{ steps.version.outputs.result }}
@@ -88,7 +100,7 @@ jobs:
           fetch-depth: 0
 
       - name: Generate Release Notes
-        if: ${{ inputs.type != 'None' && inputs.skip_release_notes != true && inputs.skip_release_notes != 'true' }}
+        if: ${{ inputs.release != 'snapshot' && (inputs.release_notes == true || inputs.release_notes == 'true') }}
         uses: tiagomta/runjs@v1
         id: notes
         env:
@@ -99,7 +111,10 @@ jobs:
           target: inline
           run: |
             // The first release has no previous tag, so it covers the whole history.
-            const previousTag = await git.describe("--tags", "--abbrev=0", "--match", "v[0-9]*").then((tag) => tag.trim(), () => null);
+            // manual excludes its own tag so a replaced release covers its full range.
+            const current = "v" + JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")).version;
+            const exclude = "${{ inputs.release }}" === "manual" ? ["--exclude", current] : [];
+            const previousTag = await git.describe("--tags", "--abbrev=0", "--match", "v[0-9]*", ...exclude).then((tag) => tag.trim(), () => null);
             const range = previousTag ? `${previousTag}..HEAD` : "HEAD";
             const since = previousTag ? `since ${previousTag}` : "in the first release";
             const messages = (await git.log("--format=%s%n%b%x00", range, "--"))
@@ -137,48 +152,69 @@ jobs:
           target: inline
           run: |
             await git.config("user.email", "devops@vistta.org");
-            const type = "${{ inputs.type }}".toLowerCase();
+            const type = "${{ inputs.release }}";
             const channel = ["alpha", "beta"].includes(type) ? type : null;
-            const bump = !["manual", "none"].includes(type);
+            const bump = !["manual", "snapshot"].includes(type);
             const version = bump
               ? await npm.version(...(channel ? ["prerelease", "--preid=" + channel] : [type]))
               : JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")).version;
             if (bump) await git.push("origin", "${{ env.ref }}", "--tags");
             // run_number is the repository-wide run index, so each snapshot gets its own version.
-            const snapshot = type === "none" ? "-snapshot.${{ github.run_number }}" : "";
+            const snapshot = type === "snapshot" ? "-snapshot.${{ github.run_number }}" : "";
             global.result = version.trim().replace(/^v/, "") + snapshot;
 
       - name: Gitea Release
-        if: ${{ inputs.type != 'None' }}
+        if: ${{ inputs.release != 'snapshot' }}
         uses: tiagomta/runjs@v1
         id: release
         env:
+          TOKEN: ${{ secrets.TOKEN }}
+          API: ${{ github.api_url }}/repos/${{ github.repository }}
           RELEASE_NOTES: ${{ steps.notes.outputs.result }}
         with:
           target: inline
-          context: |
-            {
-              "api_url": "${{ github.api_url }}",
-              "repository": "${{ github.repository }}",
-              "token": "${{ secrets.TOKEN }}"
-            }
           run: |
+            const { TOKEN, API, RELEASE_NOTES } = process.env;
             const version = `${{ steps.version.outputs.result }}`.trim();
-            const isPrerelease = ["alpha", "beta"].includes("${{ inputs.type }}".toLowerCase());
-            // Issues are disabled on this repository, so no milestone or issue list is built.
-            const release = await gitea.releases.create({
-              tag_name: "v" + version,
-              target_commitish: (await git.revParse("HEAD")).trim(),
-              name: "v" + version,
-              body: process.env.RELEASE_NOTES,
-              draft: true,
-              prerelease: isPrerelease
-            });
-            global.result = release.id;
+            const tag = "v" + version;
+            const head = (await git.revParse("HEAD")).trim();
+            const request = async (url, options = {}) => {
+              const response = await fetch(url, { ...options, headers: { Authorization: `token ${TOKEN}`, "Content-Type": "application/json" } });
+              if (options.optional && response.status === 404) return null;
+              if (!response.ok) throw new Error(`${options.method ?? "GET"} ${url}: ${response.status} ${await response.text()}`);
+              return response.json();
+            };
+            // Version bumps already pushed a new tag; manual moves or creates the package.json version tag.
+            if ("${{ inputs.release }}" === "manual") {
+              await git.config("user.name", "Vistta DevOps");
+              await git.tag("-f", "-a", tag, "-m", version, head);
+              await git.push("origin", `refs/tags/${tag}`, "--force");
+            }
+            const existing = await request(`${API}/releases/tags/${encodeURIComponent(tag)}`, { optional: true });
+            if (existing) {
+              // Without generated notes, the existing notes are kept.
+              const update = { target_commitish: head, ...(RELEASE_NOTES ? { body: RELEASE_NOTES } : {}) };
+              await request(`${API}/releases/${existing.id}`, { method: "PATCH", body: JSON.stringify(update) });
+              global.result = existing.id;
+            } else {
+              const release = await request(`${API}/releases`, {
+                method: "POST",
+                body: JSON.stringify({
+                  tag_name: tag,
+                  target_commitish: head,
+                  name: tag,
+                  body: RELEASE_NOTES || "",
+                  draft: true,
+                  prerelease: version.includes("-"),
+                }),
+              });
+              global.result = release.id;
+            }
 
   # Cross-compiled on Linux: js-native targets x86_64-pc-windows-gnu (MinGW + NSIS in vistta/runner).
   Windows:
     needs: Release
+    if: always() && needs.Release.result == 'success'
     runs-on: ubuntu-latest
     container:
       image: vistta/runner
@@ -225,6 +261,7 @@ jobs:
 
   Linux:
     needs: Release
+    if: always() && needs.Release.result == 'success'
     runs-on: ubuntu-latest
     container:
       image: vistta/runner
@@ -271,6 +308,7 @@ jobs:
 
   Android:
     needs: Release
+    if: always() && needs.Release.result == 'success'
     runs-on: ubuntu-latest
     container:
       image: vistta/runner
@@ -315,6 +353,7 @@ jobs:
 
   Docker:
     needs: Release
+    if: always() && needs.Release.result == 'success'
     runs-on: ubuntu-latest
     env:
       TOKEN: ${{ secrets.TOKEN }}
@@ -368,7 +407,7 @@ jobs:
           docker save -o /tmp/codehub-image.tar "$REGISTRY/vistta/codehub:$VERSION"
           /tmp/regctl image import "$REGISTRY/vistta/codehub:$VERSION" /tmp/codehub-image.tar
           rm -f /tmp/codehub-image.tar
-          if [ "${{ inputs.type }}" != "None" ]; then
+          if [ "${{ inputs.release }}" != "snapshot" ]; then
             /tmp/regctl image copy "$REGISTRY/vistta/codehub:$VERSION" "$REGISTRY/vistta/codehub:latest"
           fi
 
@@ -392,7 +431,7 @@ jobs:
 
   Publish:
     needs: [Release, Windows, Linux, Android, Docker]
-    if: needs.Release.outputs.id != ''
+    if: always() && needs.Windows.result == 'success' && needs.Linux.result == 'success' && needs.Android.result == 'success' && needs.Docker.result == 'success' && needs.Release.outputs.id != ''
     runs-on: ubuntu-latest
     container:
       image: node:latest
@@ -416,7 +455,9 @@ jobs:
           if (!files.length) throw new Error("No package files to link.");
           const release = await request(`${API}/releases/${RELEASE_ID}`);
           const links = files.map(({ name }) => `- [${name}](${PACKAGES}/${encodeURIComponent(name)})`).join("\n");
-          const body = [release.body?.trim(), `## Downloads\n\n${links}`].filter(Boolean).join("\n\n");
+          // A replaced release already has a Downloads section from its previous build.
+          const notes = release.body?.replace(/(?:^|\n+)## Downloads\n[\s\S]*$/, "").trim();
+          const body = [notes, `## Downloads\n\n${links}`].filter(Boolean).join("\n\n");
           await request(`${API}/releases/${RELEASE_ID}`, { method: "PATCH", body: JSON.stringify({ body, draft: false }) });
           console.log(`Published ${release.tag_name}`);
           EOF
