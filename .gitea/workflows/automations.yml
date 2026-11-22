@@ -1,5 +1,5 @@
 name: Automations
-run-name: ${{ github.event_name == 'push' && format('Validation by {0}', github.actor) || inputs.release == 'skip' && format('Validation by {0}', github.actor) || inputs.release == 'snapshot' && format('Snapshot by {0}', github.actor) || format('{0} release by {1}', inputs.release, github.actor) }}
+run-name: ${{ github.event_name == 'push' && format('Validation by {0}', github.actor) || inputs.release == 'Skip' && format('Validation by {0}', github.actor) || inputs.release == 'Snapshot' && format('Snapshot by {0}', github.actor) || format('{0} release by {1}', inputs.release, github.actor) }}
 on:
   push:
     branches:
@@ -14,17 +14,17 @@ on:
       release:
         description: "Release"
         required: true
-        default: skip
+        default: Skip
         type: choice
         options:
-          - skip
-          - manual
-          - snapshot
-          - alpha
-          - beta
-          - patch
-          - minor
-          - major
+          - Skip
+          - Manual
+          - Snapshot
+          - Alpha
+          - Beta
+          - Patch
+          - Minor
+          - Major
       release_notes:
         description: "Release Notes"
         required: false
@@ -86,7 +86,7 @@ jobs:
     container:
       image: node:latest
     # always() lets the job run when Validation was skipped, but not when it failed.
-    if: always() && (needs.Validation.result == 'success' || needs.Validation.result == 'skipped') && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release != 'skip'
+    if: always() && (needs.Validation.result == 'success' || needs.Validation.result == 'skipped') && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release != 'Skip'
     outputs:
       id: ${{ steps.release.outputs.result }}
       version: ${{ steps.version.outputs.result }}
@@ -99,7 +99,7 @@ jobs:
           fetch-depth: 0
 
       - name: Generate Release Notes
-        if: ${{ inputs.release != 'snapshot' && (inputs.release_notes == true || inputs.release_notes == 'true') }}
+        if: ${{ inputs.release != 'Snapshot' && (inputs.release_notes == true || inputs.release_notes == 'true') }}
         uses: tiagomta/runjs@v1
         id: notes
         env:
@@ -112,7 +112,7 @@ jobs:
             // The first release has no previous tag, so it covers the whole history.
             // manual excludes its own tag so a replaced release covers its full range.
             const current = "v" + JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")).version;
-            const exclude = "${{ inputs.release }}" === "manual" ? ["--exclude", current] : [];
+            const exclude = "${{ inputs.release }}" === "Manual" ? ["--exclude", current] : [];
             const previousTag = await git.describe("--tags", "--abbrev=0", "--match", "v[0-9]*", ...exclude).then((tag) => tag.trim(), () => null);
             const range = previousTag ? `${previousTag}..HEAD` : "HEAD";
             const since = previousTag ? `since ${previousTag}` : "in the first release";
@@ -151,7 +151,7 @@ jobs:
           target: inline
           run: |
             await git.config("user.email", "devops@vistta.org");
-            const type = "${{ inputs.release }}";
+            const type = "${{ inputs.release }}".toLowerCase();
             const channel = ["alpha", "beta"].includes(type) ? type : null;
             const bump = !["manual", "snapshot"].includes(type);
             const version = bump
@@ -163,7 +163,7 @@ jobs:
             global.result = version.trim().replace(/^v/, "") + snapshot;
 
       - name: Gitea Release
-        if: ${{ inputs.release != 'snapshot' }}
+        if: ${{ inputs.release != 'Snapshot' }}
         uses: tiagomta/runjs@v1
         id: release
         env:
@@ -184,7 +184,7 @@ jobs:
               return response.json();
             };
             // Version bumps already pushed a new tag; manual moves or creates the package.json version tag.
-            if ("${{ inputs.release }}" === "manual") {
+            if ("${{ inputs.release }}" === "Manual") {
               await git.config("user.name", "Vistta DevOps");
               await git.tag("-f", "-a", tag, "-m", version, head);
               await git.push("origin", `refs/tags/${tag}`, "--force");
@@ -406,7 +406,7 @@ jobs:
           docker save -o /tmp/codehub-image.tar "$REGISTRY/vistta/codehub:$VERSION"
           /tmp/regctl image import "$REGISTRY/vistta/codehub:$VERSION" /tmp/codehub-image.tar
           rm -f /tmp/codehub-image.tar
-          if [ "${{ inputs.release }}" != "snapshot" ]; then
+          if [ "${{ inputs.release }}" != "Snapshot" ]; then
             /tmp/regctl image copy "$REGISTRY/vistta/codehub:$VERSION" "$REGISTRY/vistta/codehub:latest"
           fi
 
