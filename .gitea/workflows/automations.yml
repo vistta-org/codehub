@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       validation:
-        description: "Run validation (lint, types, and tests) before publishing"
+        description: "Validation"
         required: false
         default: true
         type: boolean
       release:
-        description: "skip publishes nothing; manual publishes or replaces the package.json version; others publish a snapshot or a new version"
+        description: "Release"
         required: true
         default: skip
         type: choice
@@ -26,7 +26,7 @@ on:
           - minor
           - major
       release_notes:
-        description: "Generate AI release notes (ignored for snapshot)"
+        description: "Release Notes"
         required: false
         default: false
         type: boolean
@@ -75,7 +75,6 @@ jobs:
       - name: Typescript Validation
         working-directory: ./codehub
         run: npx vistta types
-
 
       - name: Unit Tests
         working-directory: ./codehub
